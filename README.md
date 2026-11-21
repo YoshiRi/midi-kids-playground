@@ -3,7 +3,7 @@
 PC や iPad に MIDI キーボードを繋いで、子どもが楽しく音あそび・ミニゲームで遊べる **ゼロ依存・ビルド不要のプレイグラウンド** です。
 
 - 🌐 **ライブデモ (GitHub Pages)**: https://yoshiri.github.io/midi-kids-playground/
-- 📱 **PC / iPad 両対応**: Web MIDI API + Web Audio API（MIDI キーボードがないときも画面マルチタッチ鍵盤・PCキーボードで動作）
+- 📱 **PC / Android / iPad 対応**: Web MIDI API + Web Audio API（MIDI キーボードがないときも画面マルチタッチ鍵盤・PCキーボードで動作）
 - 🧩 **ミニゲーム追加が超かんたん**: `src/games/` に 1 ファイル足して登録するだけで新しいゲームを増やせます
 
 ---
@@ -34,12 +34,13 @@ python3 -m http.server 8000
 
 ---
 
-## 📱 PC・iPad の MIDI 接続について
+## 📱 PC・Android・iPad の MIDI 接続について
 
 詳しい手順は [docs/IPAD_SETUP.md](./docs/IPAD_SETUP.md) をご覧ください。
 
 - **PC**: Chrome / Edge / Firefox で開いて MIDI キーボードを USB 接続すれば自動認識します。
-- **iPad**: 標準 Safari は Web MIDI API 非対応のため、MIDI キーボードを直接繋ぐ場合は **Web MIDI Browser** アプリでこの URL を開いてください（標準 Safari でも画面のマルチタッチ鍵盤で遊べます）。
+- **Android**: 標準の **Google Chrome** が Web MIDI API に対応しているため、USB-C（または OTG）で繋いでそのまま開くだけで動きます。
+- **iPad**: 標準の Safari / Chrome は Web MIDI API 非対応のため、MIDI キーボードを直接繋ぐ場合は **Web MIDI Browser** アプリでこの URL を開いてください（標準ブラウザでも画面のマルチタッチ鍵盤で遊べます）。
 
 ---
 

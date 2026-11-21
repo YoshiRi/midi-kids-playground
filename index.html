@@ -24,7 +24,7 @@
         <span id="midi-last-note" class="last-note-chip" title="さいごにひいた音">🎵 ドレミ</span>
         <span id="midi-status-badge" class="midi-badge is-waiting">🔌 MIDI確認中...</span>
         <select id="midi-device-select" class="select-pill select-sm is-hidden" aria-label="MIDIデバイス選択"></select>
-        <button type="button" class="icon-btn js-open-help" title="PC・iPadでのMIDI接続ガイド">❓ つなぎかた</button>
+        <button type="button" class="icon-btn js-open-help" title="PC・Android・iPadでのMIDI接続ガイド">❓ つなぎかた</button>
       </div>
     </header>
 
@@ -67,12 +67,12 @@
   <div id="help-modal" class="modal-backdrop" aria-hidden="true" role="dialog" aria-labelledby="help-modal-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h2 id="help-modal-title">🎹 MIDIキーボードの つなぎかた（PC / iPad）</h2>
+        <h2 id="help-modal-title">🎹 MIDIキーボードの つなぎかた（PC / Android / iPad）</h2>
         <button type="button" id="help-close-btn" class="modal-close" aria-label="とじる">✕</button>
       </div>
       <div class="modal-body">
         <div class="help-section">
-          <h3>💻 PC（Mac / Windows）</h3>
+          <h3>💻 PC（Mac / Windows / Chromebook）</h3>
           <ol>
             <li>MIDIキーボードをUSBケーブル（またはBluetooth MIDI）でPCに繋ぎます。</li>
             <li><strong>Google Chrome / Microsoft Edge / Firefox</strong> でこのページを開くと自動で認識します。</li>
@@ -81,9 +81,21 @@
         </div>
 
         <div class="help-section">
+          <h3>🤖 Android（タブレット / スマホ）</h3>
+          <ol>
+            <li>MIDIキーボードを <strong>USB-Cケーブル</strong>（または OTG アダプタ）で Android 端末に繋ぎます。</li>
+            <li>標準の <strong>Google Chrome</strong> でこのページを開きます（専用アプリ不要です）。</li>
+            <li>初回に「MIDI デバイスの制御を許可しますか？」と表示されたら「許可」をタップすると自動で認識します。</li>
+          </ol>
+          <p class="help-note">
+            💡 電力消費が大きいキーボードで電源が入らない場合は、キーボード側を電池駆動にするか給電付き USB-C ハブ経由で繋いでください。Bluetooth MIDI は「MIDI+BTLE」等のアプリで一度ペアリングすると Chrome から認識されます。
+          </p>
+        </div>
+
+        <div class="help-section">
           <h3>📱 iPad で MIDIキーボードを繋ぐ方法</h3>
           <p class="help-note">
-            ⚠️ iPad標準の <strong>Safari / Chrome</strong> は現在 Web MIDI API に未対応です。以下の手順でMIDIキーボードがそのまま動きます！
+            ⚠️ iPad標準の <strong>Safari / Chrome</strong> は WebKit の制約により Web MIDI API に未対応です。以下の手順でMIDIキーボードがそのまま動きます！
           </p>
           <ol>
             <li>iPadとMIDIキーボードを <strong>USB-Cケーブル</strong>（Lightning機種はカメラアダプタ）または <strong>Bluetooth MIDI</strong> で接続します。</li>

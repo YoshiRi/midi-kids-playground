@@ -1,6 +1,17 @@
-# PC / iPad と MIDIキーボードの接続ガイド
+# PC / Android / iPad と MIDIキーボードの接続ガイド
 
-## 💻 PC（Mac / Windows）で遊ぶ
+## 対応状況まとめ
+
+| 端末 | ブラウザ | Web MIDI API | 備考 |
+|---|---|---|---|
+| **PC (Mac / Win / Chromebook)** | Chrome / Edge / Firefox | ✅ 標準対応 | ケーブルを挿すだけで即OK |
+| **Android タブレット / スマホ** | Chrome（標準） | ✅ 標準対応 | 専用アプリ不要でそのまま動く |
+| **iPad / iPhone** | Safari / Chrome / Firefox | ❌ 非対応 | iPad版Chromeも中身がWebKitのため非対応 |
+| **iPad / iPhone** | **Web MIDI Browser** 等 | ✅ アプリ経由で対応 | アプリ内ブラウザでURLを開くと動く |
+
+---
+
+## 💻 PC（Mac / Windows / Chromebook）で遊ぶ
 
 1. MIDIキーボードを USB ケーブル（または Bluetooth MIDI）で PC に接続します。
 2. 以下の Web MIDI API 対応ブラウザでこのサイトを開きます。
@@ -10,6 +21,24 @@
 3. 右上のステータスが `🎹 MIDI接続中: <キーボード名>` に変わったらそのまま遊べます。
 
 > MIDIキーボードがなくても、PCキーボード（`A W S E D F T G Y H U J K`）やマウスクリックで全ゲームをテスト・プレイできます。
+
+---
+
+## 🤖 Android タブレット / スマホで遊ぶ（おすすめ・専用アプリ不要）
+
+Android の標準 **Google Chrome** は Web MIDI API に対応しているため、iPad のような専用ブラウザは不要です。
+
+1. **ハードウェア接続**
+   - **USB 接続**: USB-C ケーブル（または OTG アダプタ）で MIDI キーボードを Android 端末に繋ぎます。
+     - バスパワー（USB給電）のキーボードで電力が足りない場合は、キーボードを電池/AC駆動にするか、給電対応の USB-C ハブ経由で接続してください。
+   - **Bluetooth MIDI**: 通常の Bluetooth 設定では MIDI 機器として見えないことがあるため、「MIDI+BTLE」などの無料ユーティリティで一度接続すると Chrome から認識されます。
+2. **Chrome で開く**
+   - Chrome でこのページの URL（HTTPS の GitHub Pages 等）を開きます。
+   - 初回に「MIDI デバイスの制御を許可しますか？」と出たら **許可** をタップします。
+   - 右上が `🎹 MIDI接続中` に変わればそのまま遊べます。
+3. **補足**
+   - Chrome のメニューから「ホーム画面に追加」をしておくと、アプリのようにフルスクリーンで起動できます。
+   - 機種によっては Android の Web Audio 発音が Mac / iPad よりわずかに遅延することがあります。
 
 ---
 
