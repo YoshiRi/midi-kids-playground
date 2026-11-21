@@ -1,0 +1,11 @@
+{
+  "name": "MIDI Kids Playground",
+  "short_name": "MIDIあそび",
+  "description": "MIDIキーボードやタッチ鍵盤で遊べる子供向け音楽ゲームプレイグラウンド",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a1b3a",
+  "theme_color": "#262857",
+  "icons": []
+}
