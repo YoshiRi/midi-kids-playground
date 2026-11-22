@@ -2,6 +2,10 @@ import { midiToFreq } from './notes.js';
 
 /**
  * Web Audio API を使ったゼロ依存のキッズ向けポリフォニックシンセ＆効果音エンジン
+ * - iOS / iPadOS Safari / Web MIDI Browser 対応:
+ *   - navigator.audioSession.type = 'playback' (iPadOS 17+)
+ *   - 極小無音WAVの <audio> 再生によるサイレントモード突破
+ *   - suspended / interrupted 状態からの自動 resume
  */
 export const SOUND_PRESETS = [
   { id: 'piano', label: '🎹 ピアノ' },
@@ -10,22 +14,69 @@ export const SOUND_PRESETS = [
   { id: 'chip', label: '👾 ピコピコ' },
 ];
 
+// 44.1kHz 16bit mono の極小無音WAV（iOS/iPadOSのメディアオーディオセッション起動用）
+const SILENT_WAV_DATA_URI =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
 export class KidsAudioEngine {
   constructor() {
     this.ctx = null;
     this.masterGain = null;
     this.preset = 'piano';
-    this.volume = 0.7;
+    this.volume = 0.78;
     this.muted = false;
     /** @type {Map<number, { stop: () => void }>} */
     this.activeVoices = new Map();
-    this.unlocked = false;
+    this._mediaUnlocked = false;
+    this._silentAudioEl = null;
+    /** @type {Set<(state: { ready: boolean, ctxState: string, muted: boolean }) => void>} */
+    this._stateListeners = new Set();
+
+    this._configureAudioSession();
+  }
+
+  _configureAudioSession() {
+    try {
+      if (typeof navigator !== 'undefined' && 'audioSession' in navigator && navigator.audioSession) {
+        navigator.audioSession.type = 'playback';
+      }
+    } catch {
+      // ignore unsupported browsers
+    }
+  }
+
+  onStateChange(fn) {
+    this._stateListeners.add(fn);
+    fn(this.getState());
+    return () => this._stateListeners.delete(fn);
+  }
+
+  getState() {
+    const ctxState = this.ctx ? this.ctx.state : 'uninitialized';
+    return {
+      ready: ctxState === 'running',
+      ctxState,
+      muted: this.muted,
+    };
+  }
+
+  _emitState() {
+    const s = this.getState();
+    for (const fn of this._stateListeners) {
+      fn(s);
+    }
   }
 
   ensureContext() {
+    this._configureAudioSession();
+
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioCtx();
+
+      this.ctx.onstatechange = () => {
+        this._emitState();
+      };
 
       const compressor = this.ctx.createDynamicsCompressor();
       compressor.threshold.value = -14;
@@ -39,28 +90,72 @@ export class KidsAudioEngine {
 
       this.masterGain.connect(compressor);
       compressor.connect(this.ctx.destination);
+      this._emitState();
     }
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
+
+    if (this.ctx.state !== 'running') {
+      this.ctx
+        .resume()
+        .then(() => this._emitState())
+        .catch(() => {});
     }
     return this.ctx;
   }
 
   /**
-   * iOS / iPadOS のオーディオロックをユーザー操作時に解除
+   * iOS / iPadOS のオーディオロック・サイレントモード制限をユーザー操作内で解除
+   * touchstart / touchend / click / pointerdown の同期ハンドラから呼ぶこと
    */
   unlock() {
+    this._configureAudioSession();
+
+    // 1. HTML5 <audio> で極小無音WAVを再生し、iPadOS のメディア再生チャンネルを起こす
+    //    （コントロールセンターの消音モード中でも Web Audio が鳴るようにする）
+    if (!this._mediaUnlocked && typeof Audio !== 'undefined') {
+      try {
+        if (!this._silentAudioEl) {
+          const el = new Audio(SILENT_WAV_DATA_URI);
+          el.setAttribute('playsinline', '');
+          el.playsInline = true;
+          el.preload = 'auto';
+          this._silentAudioEl = el;
+        }
+        const playPromise = this._silentAudioEl.play();
+        if (playPromise && typeof playPromise.then === 'function') {
+          playPromise
+            .then(() => {
+              this._mediaUnlocked = true;
+            })
+            .catch(() => {
+              // ユーザー操作外だった場合は次回タッチで再試行
+            });
+        } else {
+          this._mediaUnlocked = true;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. Web AudioContext を生成・resume・無音バッファ発音
     const ctx = this.ensureContext();
-    if (this.unlocked && ctx.state === 'running') return;
     try {
       const buffer = ctx.createBuffer(1, 1, 22050);
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       src.connect(ctx.destination);
       src.start(0);
-      this.unlocked = true;
     } catch {
       // ignore
+    }
+
+    if (ctx.state !== 'running') {
+      ctx
+        .resume()
+        .then(() => this._emitState())
+        .catch(() => {});
+    } else {
+      this._emitState();
     }
   }
 
@@ -75,40 +170,57 @@ export class KidsAudioEngine {
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.015);
     }
+    this._emitState();
   }
 
   noteOn(midiNote, velocity = 0.8) {
     const ctx = this.ensureContext();
     if (this.muted) return;
 
-    // 同じノートの既存発音を軽くリリース
-    if (this.activeVoices.has(midiNote)) {
-      this.activeVoices.get(midiNote).stop();
-      this.activeVoices.delete(midiNote);
+    const trigger = () => {
+      if (this.muted) return;
+      // 同じノートの既存発音を軽くリリース
+      if (this.activeVoices.has(midiNote)) {
+        this.activeVoices.get(midiNote).stop();
+        this.activeVoices.delete(midiNote);
+      }
+
+      const freq = midiToFreq(midiNote);
+      const vel = Math.max(0.2, Math.min(1.0, velocity));
+      const now = ctx.currentTime;
+
+      let voice;
+      switch (this.preset) {
+        case 'marimba':
+          voice = this._playMarimba(ctx, freq, vel, now);
+          break;
+        case 'bell':
+          voice = this._playBell(ctx, freq, vel, now);
+          break;
+        case 'chip':
+          voice = this._playChip(ctx, freq, vel, now);
+          break;
+        case 'piano':
+        default:
+          voice = this._playPiano(ctx, freq, vel, now);
+          break;
+      }
+
+      this.activeVoices.set(midiNote, voice);
+    };
+
+    // 初回タッチ等でまだ suspended/interrupted の場合は resume 完了直後に鳴らす
+    if (ctx.state !== 'running') {
+      ctx
+        .resume()
+        .then(() => {
+          this._emitState();
+          trigger();
+        })
+        .catch(() => {});
+    } else {
+      trigger();
     }
-
-    const freq = midiToFreq(midiNote);
-    const vel = Math.max(0.18, Math.min(1.0, velocity));
-    const now = ctx.currentTime;
-
-    let voice;
-    switch (this.preset) {
-      case 'marimba':
-        voice = this._playMarimba(ctx, freq, vel, now);
-        break;
-      case 'bell':
-        voice = this._playBell(ctx, freq, vel, now);
-        break;
-      case 'chip':
-        voice = this._playChip(ctx, freq, vel, now);
-        break;
-      case 'piano':
-      default:
-        voice = this._playPiano(ctx, freq, vel, now);
-        break;
-    }
-
-    this.activeVoices.set(midiNote, voice);
   }
 
   noteOff(midiNote) {
@@ -132,10 +244,26 @@ export class KidsAudioEngine {
   playDemoNote(midiNote, durationMs = 420, velocity = 0.65) {
     const ctx = this.ensureContext();
     if (this.muted) return;
-    const freq = midiToFreq(midiNote);
-    const now = ctx.currentTime;
-    const voice = this._playPiano(ctx, freq, velocity, now);
-    setTimeout(() => voice.stop(), durationMs);
+
+    const run = () => {
+      if (this.muted) return;
+      const freq = midiToFreq(midiNote);
+      const now = ctx.currentTime;
+      const voice = this._playPiano(ctx, freq, velocity, now);
+      setTimeout(() => voice.stop(), durationMs);
+    };
+
+    if (ctx.state !== 'running') {
+      ctx
+        .resume()
+        .then(() => {
+          this._emitState();
+          run();
+        })
+        .catch(() => {});
+    } else {
+      run();
+    }
   }
 
   _playPiano(ctx, freq, vel, now) {
@@ -166,8 +294,8 @@ export class KidsAudioEngine {
     osc3Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
     out.gain.setValueAtTime(0.0001, now);
-    out.gain.linearRampToValueAtTime(0.42 * vel, now + 0.008);
-    out.gain.exponentialRampToValueAtTime(0.18 * vel, now + 0.22);
+    out.gain.linearRampToValueAtTime(0.46 * vel, now + 0.008);
+    out.gain.exponentialRampToValueAtTime(0.2 * vel, now + 0.22);
     out.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
 
     osc1.connect(filter);
@@ -223,7 +351,7 @@ export class KidsAudioEngine {
     g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
 
     out.gain.setValueAtTime(0.0001, now);
-    out.gain.linearRampToValueAtTime(0.55 * vel, now + 0.005);
+    out.gain.linearRampToValueAtTime(0.58 * vel, now + 0.005);
     out.gain.exponentialRampToValueAtTime(0.0008, now + 0.48);
 
     osc1.connect(out);
@@ -281,7 +409,7 @@ export class KidsAudioEngine {
     g3.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
 
     out.gain.setValueAtTime(0.0001, now);
-    out.gain.linearRampToValueAtTime(0.38 * vel, now + 0.004);
+    out.gain.linearRampToValueAtTime(0.42 * vel, now + 0.004);
     out.gain.exponentialRampToValueAtTime(0.0008, now + 1.6);
 
     osc1.connect(out);
@@ -336,7 +464,7 @@ export class KidsAudioEngine {
     g2.gain.value = 0.24;
 
     out.gain.setValueAtTime(0.0001, now);
-    out.gain.linearRampToValueAtTime(0.65 * vel, now + 0.005);
+    out.gain.linearRampToValueAtTime(0.68 * vel, now + 0.005);
     out.gain.exponentialRampToValueAtTime(0.28 * vel, now + 0.15);
     out.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
 
@@ -379,24 +507,39 @@ export class KidsAudioEngine {
   playSfx(type) {
     if (this.muted) return;
     const ctx = this.ensureContext();
-    const now = ctx.currentTime;
+    const run = () => {
+      if (this.muted) return;
+      const now = ctx.currentTime;
 
-    if (type === 'correct') {
-      this._beep(ctx, 880, now, 0.09, 0.14, 'triangle');
-      this._beep(ctx, 1174.66, now + 0.065, 0.14, 0.16, 'triangle');
-    } else if (type === 'combo') {
-      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-        this._beep(ctx, f, now + i * 0.055, 0.14, 0.15, 'sine');
-      });
-    } else if (type === 'clear') {
-      const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
-      const times = [0, 0.1, 0.2, 0.32, 0.48, 0.6];
-      const durs  = [0.12, 0.12, 0.12, 0.18, 0.12, 0.42];
-      notes.forEach((f, i) => {
-        this._beep(ctx, f, now + times[i], durs[i], 0.18, 'triangle');
-      });
-    } else if (type === 'softOops') {
-      this._beep(ctx, 260, now, 0.09, 0.08, 'sine');
+      if (type === 'correct') {
+        this._beep(ctx, 880, now, 0.09, 0.14, 'triangle');
+        this._beep(ctx, 1174.66, now + 0.065, 0.14, 0.16, 'triangle');
+      } else if (type === 'combo') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+          this._beep(ctx, f, now + i * 0.055, 0.14, 0.15, 'sine');
+        });
+      } else if (type === 'clear') {
+        const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
+        const times = [0, 0.1, 0.2, 0.32, 0.48, 0.6];
+        const durs = [0.12, 0.12, 0.12, 0.18, 0.12, 0.42];
+        notes.forEach((f, i) => {
+          this._beep(ctx, f, now + times[i], durs[i], 0.18, 'triangle');
+        });
+      } else if (type === 'softOops') {
+        this._beep(ctx, 260, now, 0.09, 0.08, 'sine');
+      }
+    };
+
+    if (ctx.state !== 'running') {
+      ctx
+        .resume()
+        .then(() => {
+          this._emitState();
+          run();
+        })
+        .catch(() => {});
+    } else {
+      run();
     }
   }
 

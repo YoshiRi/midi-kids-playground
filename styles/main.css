@@ -139,6 +139,37 @@ body {
   background: #353a82;
 }
 
+/* Audio Unlock Banner */
+.audio-unlock-banner {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.audio-unlock-btn {
+  width: 100%;
+  border: 2px solid #ffe380;
+  background: linear-gradient(90deg, #ff924c, #ff595e);
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.96rem;
+  font-weight: 900;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(255, 89, 94, 0.42);
+  animation: unlockPulse 1.6s ease-in-out infinite;
+}
+
+.audio-unlock-btn:active {
+  transform: scale(0.98);
+}
+
+@keyframes unlockPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
 /* iPad Banner */
 .ipad-banner {
   display: flex;

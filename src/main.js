@@ -29,12 +29,22 @@ let activeGameId = GAMES[0].id;
 let activeGameInstance = null;
 let isTwoOctave = false;
 
-// 初回操作で iOS/iPadOS のオーディオを確実にアンロック
-const unlockOnce = () => {
+// iOS/iPadOS Safari は touchstart / touchend / click の同期ハンドラ内でないと
+// Web Audio API とメディアオーディオセッションのロックが解除されないため全イベントで捕捉する
+const unlockAudio = () => {
   audio.unlock();
 };
-window.addEventListener('pointerdown', unlockOnce, { passive: true });
-window.addEventListener('keydown', unlockOnce, { passive: true });
+window.addEventListener('touchstart', unlockAudio, { capture: true, passive: true });
+window.addEventListener('touchend', unlockAudio, { capture: true, passive: true });
+window.addEventListener('pointerdown', unlockAudio, { capture: true, passive: true });
+window.addEventListener('click', unlockAudio, { capture: true, passive: true });
+window.addEventListener('keydown', unlockAudio, { capture: true, passive: true });
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    audio.ensureContext();
+  }
+});
 
 // 統一ノートハンドラ（MIDI / 画面タッチ / PCキーボード 共通）
 function handleNoteOn(noteInfo, source) {
@@ -204,6 +214,19 @@ function initControls() {
       els.ipadBanner.classList.add('is-hidden');
     });
   }
+
+  if (els.audioUnlockBtn) {
+    const handleUnlockTap = () => {
+      audio.unlock();
+      audio.playSfx('combo');
+    };
+    els.audioUnlockBtn.addEventListener('click', handleUnlockTap);
+  }
+
+  audio.onStateChange((state) => {
+    if (!els.audioUnlockBanner) return;
+    els.audioUnlockBanner.classList.toggle('is-hidden', state.ready);
+  });
 }
 
 // MIDI接続ステータス表示
