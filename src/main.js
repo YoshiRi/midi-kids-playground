@@ -2,9 +2,11 @@ import { KidsAudioEngine, SOUND_PRESETS } from './core/audio.js';
 import { MidiManager, isIPadOrIOS } from './core/midi.js';
 import { VisualKeyboard } from './core/keyboard.js';
 import { GAMES, getGameById } from './core/gameRegistry.js';
+import { loadSettings, saveSettings } from './core/storage.js';
 
 const audio = new KidsAudioEngine();
 const midi = new MidiManager();
+const savedSettings = loadSettings();
 
 const els = {
   // Topbar
@@ -48,7 +50,7 @@ const els = {
   helpCloseBtn: document.getElementById('help-close-btn'),
 };
 
-let activeGameId = GAMES[0].id;
+let activeGameId = getGameById(savedSettings.lastGameId).id;
 let activeGameInstance = null;
 
 // iOS/iPadOS Safari は touchstart / touchend / click の同期ハンドラ内でないと
@@ -127,6 +129,7 @@ function closeAllOverlays() {
 function mountGame(gameId) {
   const game = getGameById(gameId);
   activeGameId = game.id;
+  saveSettings({ lastGameId: game.id });
 
   if (activeGameInstance && typeof activeGameInstance.unmount === 'function') {
     activeGameInstance.unmount();
@@ -230,13 +233,16 @@ function initControls() {
     if (e.key === 'Escape') closeAllOverlays();
   });
 
-  // 音色
+  // 音色（保存済み設定を復元）
   els.soundSelect.innerHTML = SOUND_PRESETS.map(
     (p) => `<option value="${p.id}">${p.label}</option>`
   ).join('');
+  audio.setPreset(savedSettings.soundPreset);
+  els.soundSelect.value = audio.preset;
   els.soundSelect.addEventListener('change', () => {
     audio.unlock();
     audio.setPreset(els.soundSelect.value);
+    saveSettings({ soundPreset: audio.preset });
     audio.playDemoNote(60, 260, 0.55);
   });
 
@@ -261,42 +267,60 @@ function initControls() {
     audio.playSfx('combo');
   });
 
-  // オクターブ範囲
+  // オクターブ範囲（保存済み設定を復元）
+  const applyRange = (range) => {
+    const normalized = range === '2oct' ? '2oct' : '1oct';
+    els.rangeBtns.forEach((b) => b.classList.toggle('is-active', b.dataset.range === normalized));
+    if (normalized === '2oct') {
+      keyboard.setRange(48, 72);
+    } else {
+      keyboard.setRange(60, 72);
+    }
+    return normalized;
+  };
+  applyRange(savedSettings.keyboardRange);
   els.rangeBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
-      const range = btn.dataset.range;
-      els.rangeBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
-      if (range === '2oct') {
-        keyboard.setRange(48, 72);
-      } else {
-        keyboard.setRange(60, 72);
-      }
+      const range = applyRange(btn.dataset.range);
+      saveSettings({ keyboardRange: range });
     });
   });
 
-  // 鍵盤の高さ（スリム / ふつう / おおきめ）
+  // 鍵盤の高さ（スリム / ふつう / おおきめ・保存済み設定を復元）
+  const applyKbSize = (size) => {
+    const normalized = ['slim', 'normal', 'large'].includes(size) ? size : 'normal';
+    els.kbSizeBtns.forEach((b) => b.classList.toggle('is-active', b.dataset.kbsize === normalized));
+    els.keyboardContainer.classList.remove('is-size-slim', 'is-size-normal', 'is-size-large');
+    els.keyboardContainer.classList.add(`is-size-${normalized}`);
+    return normalized;
+  };
+  applyKbSize(savedSettings.keyboardSize);
   els.kbSizeBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
-      const size = btn.dataset.kbsize;
-      els.kbSizeBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
-      els.keyboardContainer.classList.remove('is-size-slim', 'is-size-normal', 'is-size-large');
-      els.keyboardContainer.classList.add(`is-size-${size}`);
+      const size = applyKbSize(btn.dataset.kbsize);
+      saveSettings({ keyboardSize: size });
     });
   });
 
-  // ドレミ表示 / PCキー表示
-  let showLabels = true;
+  // ドレミ表示 / PCキー表示（保存済み設定を復元）
+  let showLabels = Boolean(savedSettings.showLabels);
+  keyboard.setShowLabels(showLabels);
+  els.labelToggle.classList.toggle('is-active', showLabels);
   els.labelToggle.addEventListener('click', () => {
     showLabels = !showLabels;
     keyboard.setShowLabels(showLabels);
     els.labelToggle.classList.toggle('is-active', showLabels);
+    saveSettings({ showLabels });
   });
 
-  let showPcHints = false;
+  let showPcHints = Boolean(savedSettings.showPcHints);
+  keyboard.setShowPcHints(showPcHints);
+  els.pcHintToggle.classList.toggle('is-active', showPcHints);
   els.pcHintToggle.addEventListener('click', () => {
     showPcHints = !showPcHints;
     keyboard.setShowPcHints(showPcHints);
     els.pcHintToggle.classList.toggle('is-active', showPcHints);
+    saveSettings({ showPcHints });
   });
 
   // MIDIデバイス選択

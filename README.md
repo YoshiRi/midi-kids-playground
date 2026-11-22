@@ -17,7 +17,7 @@ PC や iPad に MIDI キーボードを繋いで、子どもが楽しく音あ�
    - 光った鍵盤やお手本と同じ音を弾いて星を集めます。
    - `🌱 やさしい`（オクターブ無視＋鍵盤ガイド）、`🎯 ぴったり`、`👂 みみクイズ`（音当て）の 3 モード対応。
 3. **🎵 リズムえんそう（5さい〜向け）**
-   - 上から落ちてくるカラフルな音符に合わせて演奏します（きらきらぼし / かえるのうた / チューリップ / メリーさんのひつじ）。
+   - 上から落ちてくるカラフルな音符に合わせて演奏します（きらきらぼし / かえるのうた / チューリップ / メリーさんのひつじ / ちょうちょう）。
    - 幼児でも必ず最後まで弾ける **`🐢 まつモード`**（正解を弾くまでヒットラインで待機）と、テンポに合わせて弾く **`🚀 リズムモード`** を切り替え可能。
 
 ---
@@ -98,20 +98,24 @@ export const myNewGame = {
 
 ```text
 midi-kids-playground/
-├── index.html                 # メインUI + 接続ガイドモーダル
+├── AGENTS.md                  # 開発ルール集（UI・キッズUX・プラグイン契約・検証手順）
+├── index.html                 # メインUI + ゲーム選択シート + 設定ドロワー + 接続ガイド
 ├── manifest.json              # iPadホーム画面追加用PWA設定
 ├── styles/main.css            # キッズ向けレスポンシブCSS（3層構造＋オーバーレイ）
 ├── docs/
 │   ├── IPAD_SETUP.md          # PC / Android / iPad MIDI接続ガイド
 │   └── UI_GUIDELINES.md       # UI設計ルール（非圧迫3層レイアウト契約）
 └── src/
-    ├── main.js                # アプリ初期化・入力ルーティング
+    ├── main.js                # アプリ初期化・入力ルーティング・設定永続化
     ├── core/
     │   ├── notes.js           # MIDIノート <-> ドレミ・周波数・虹色配色
-    │   ├── audio.js           # Web Audio API シンセ(4音色)＆効果音
+    │   ├── audio.js           # Web Audio API シンセ(4音色)＆効果音・iPad消音突破
     │   ├── midi.js            # Web MIDI API マネージャ
     │   ├── keyboard.js        # マルチタッチ＆PCキー＆MIDI連動ピアノ鍵盤
+    │   ├── storage.js         # localStorage 設定自動保存 (`mkp:settings`)
     │   └── gameRegistry.js    # ミニゲーム登録リスト
+    ├── data/
+    │   └── songs.js           # 複数ゲーム共通の子ども向け定番曲データ
     └── games/
         ├── fireworksParty.js  # 🎆 はなび＆どうぶつパーティー
         ├── starQuest.js       # ⭐ ほしあつめクエスト

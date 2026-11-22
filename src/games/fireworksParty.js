@@ -112,6 +112,20 @@ export const fireworksPartyGame = {
     const bubbles = [];
     const labels = [];
 
+    // 幼児の連打・同時押しでも iPad で 60fps を保つためのオブジェクト上限キャップ
+    const LIMITS = {
+      particles: 220,
+      critters: 36,
+      rings: 24,
+      bubbles: 45,
+      labels: 20,
+    };
+    const trimToLimit = (arr, max) => {
+      if (arr.length > max) {
+        arr.splice(0, arr.length - max);
+      }
+    };
+
     let width = 800;
     let height = 400;
     const resize = () => {
@@ -429,6 +443,12 @@ export const fireworksPartyGame = {
           recentTimestamps = [];
           spawnRainbowBurst();
         }
+
+        trimToLimit(particles, LIMITS.particles);
+        trimToLimit(critters, LIMITS.critters);
+        trimToLimit(rings, LIMITS.rings);
+        trimToLimit(bubbles, LIMITS.bubbles);
+        trimToLimit(labels, LIMITS.labels);
       },
 
       onNoteOff() {},

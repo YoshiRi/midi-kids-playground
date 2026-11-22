@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { midiToFreq, getNoteInfo, matchesNote, getWhiteNotesInRange } from '../src/core/notes.js';
 import { MidiManager } from '../src/core/midi.js';
 import { GAMES, getGameById } from '../src/core/gameRegistry.js';
+import { SONGS, getSongById } from '../src/data/songs.js';
+import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storage.js';
 
 test('notes.js: MIDI周波数と音名・ドレミ変換', () => {
   assert.equal(Math.round(midiToFreq(69)), 440);
@@ -63,4 +65,41 @@ test('gameRegistry.js: 全ミニゲームが有効なプラグイン契約を満
     ids.add(g.id);
     assert.equal(getGameById(g.id), g);
   }
+});
+
+test('songs.js: 曲データの整合性と単調増加ビート', () => {
+  assert.ok(SONGS.length >= 5);
+  const ids = new Set();
+  for (const s of SONGS) {
+    assert.ok(s.id && s.title && s.bpm > 0);
+    assert.equal(ids.has(s.id), false);
+    ids.add(s.id);
+    assert.ok(s.notes.length > 0);
+    let prevBeat = -1;
+    for (const n of s.notes) {
+      assert.ok(n.midi >= 48 && n.midi <= 84);
+      assert.ok(n.beat > prevBeat);
+      prevBeat = n.beat;
+    }
+    assert.equal(getSongById(s.id), s);
+  }
+});
+
+test('storage.js: 設定の保存・復元と壊れたJSONへの耐性', () => {
+  const mem = new Map();
+  const mockStorage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => mem.set(k, String(v)),
+  };
+
+  assert.deepEqual(loadSettings(mockStorage), DEFAULT_SETTINGS);
+
+  const updated = saveSettings({ soundPreset: 'marimba', keyboardSize: 'large' }, mockStorage);
+  assert.equal(updated.soundPreset, 'marimba');
+  assert.equal(updated.keyboardSize, 'large');
+  assert.equal(loadSettings(mockStorage).soundPreset, 'marimba');
+
+  // 壊れたJSONでもデフォルトへ安全にフォールバック
+  mockStorage.setItem('mkp:settings', '{invalid-json');
+  assert.deepEqual(loadSettings(mockStorage), DEFAULT_SETTINGS);
 });
