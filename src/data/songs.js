@@ -93,8 +93,43 @@ export const SONGS = [
       [C4, 1], [E4, 1], [G4, 1], [G4, 1], [E4, 1], [E4, 1], [E4, 2],
     ]),
   },
+  {
+    id: 'scale',
+    title: '🪜 ドレミかいだん',
+    bpm: 96,
+    notes: buildNotes([
+      [C4, 1], [D4, 1], [E4, 1], [F4, 1], [G4, 1], [A4, 1], [B4, 1], [C5, 2],
+      [C5, 1], [B4, 1], [A4, 1], [G4, 1], [F4, 1], [E4, 1], [D4, 1], [C4, 2],
+    ]),
+  },
 ];
 
 export function getSongById(id) {
   return SONGS.find((s) => s.id === id) || SONGS[0];
+}
+
+/**
+ * 曲のノーツ列を音楽的に自然なフレーズ（伸ばす音 dur >= 1.6 の直後、または最大8音）で分割する
+ * @param {Array<{id: number, midi: number, beat: number, dur: number}>} notes
+ * @param {number} maxLen
+ * @returns {Array<Array<{id: number, midi: number, beat: number, dur: number}>>}
+ */
+export function splitIntoPhrases(notes, maxLen = 8) {
+  const phrases = [];
+  let current = [];
+
+  for (let i = 0; i < notes.length; i++) {
+    const note = notes[i];
+    current.push(note);
+
+    const isPhraseEnd = note.dur >= 1.6 || current.length >= maxLen || i === notes.length - 1;
+    if (isPhraseEnd) {
+      phrases.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) {
+    phrases.push(current);
+  }
+  return phrases;
 }

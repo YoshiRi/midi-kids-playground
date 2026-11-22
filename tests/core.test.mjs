@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { midiToFreq, getNoteInfo, matchesNote, getWhiteNotesInRange } from '../src/core/notes.js';
 import { MidiManager } from '../src/core/midi.js';
 import { GAMES, getGameById } from '../src/core/gameRegistry.js';
-import { SONGS, getSongById } from '../src/data/songs.js';
+import { SONGS, getSongById, splitIntoPhrases } from '../src/data/songs.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storage.js';
 
 test('notes.js: MIDI周波数と音名・ドレミ変換', () => {
@@ -67,8 +67,8 @@ test('gameRegistry.js: 全ミニゲームが有効なプラグイン契約を満
   }
 });
 
-test('songs.js: 曲データの整合性と単調増加ビート', () => {
-  assert.ok(SONGS.length >= 5);
+test('songs.js: 曲データの整合性と単調増加ビート・フレーズ分割', () => {
+  assert.ok(SONGS.length >= 6);
   const ids = new Set();
   for (const s of SONGS) {
     assert.ok(s.id && s.title && s.bpm > 0);
@@ -82,6 +82,14 @@ test('songs.js: 曲データの整合性と単調増加ビート', () => {
       prevBeat = n.beat;
     }
     assert.equal(getSongById(s.id), s);
+
+    const phrases = splitIntoPhrases(s.notes, 8);
+    assert.ok(phrases.length >= 1);
+    const flattened = phrases.flat();
+    assert.equal(flattened.length, s.notes.length);
+    for (const p of phrases) {
+      assert.ok(p.length >= 1 && p.length <= 8);
+    }
   }
 });
 
