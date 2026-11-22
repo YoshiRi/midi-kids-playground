@@ -2,11 +2,17 @@ import { getNoteInfo, matchesNote } from '../core/notes.js';
 
 /**
  * ミニゲーム2: ひかるけんばん・ほしあつめクエスト (4〜8さい向け)
- * 光った鍵盤やお手本と同じ音を弾いて星を集める！
+ * UIルール準拠: ステージ全面を使い、スコアと難易度切替はフローティングHUD＆ポップオーバー配置
  */
 
 const PRAISES = ['すごい！✨', 'やったね！🌟', 'ばっちり！🎉', 'きらきら！💫', 'てんさい！👑'];
-const QUEST_NOTES_C4_C5 = [60, 62, 64, 65, 67, 69, 71, 72]; // C4〜C5 の白鍵
+const QUEST_NOTES_C4_C5 = [60, 62, 64, 65, 67, 69, 71, 72];
+
+const DIFFS = [
+  { id: 'easy', icon: '🌱', label: 'やさしい', desc: 'どのたかさでもOK＋ガイドあり' },
+  { id: 'exact', icon: '🎯', label: 'ぴったり', desc: 'ひかる位置をぴったり弾く' },
+  { id: 'ear', icon: '👂', label: 'みみクイズ', desc: 'おとをきいて当てる' },
+];
 
 export const starQuestGame = {
   id: 'star-quest',
@@ -17,7 +23,7 @@ export const starQuestGame = {
   accentColor: '#ffca3a',
 
   mount(ctx) {
-    let difficulty = 'easy'; // 'easy' (ガイドあり+オクターブ無視) | 'exact' (ぴったりC4-C5) | 'ear' (みみクイズ: ガイドなし)
+    let difficulty = 'easy';
     let score = 0;
     let combo = 0;
     let targetMidi = 60;
@@ -25,16 +31,29 @@ export const starQuestGame = {
     let nextTimer = null;
 
     ctx.container.innerHTML = `
-      <div class="game-quest">
-        <div class="game-toolbar">
-          <div class="mode-pills" role="group" aria-label="むずかしさ">
-            <button type="button" class="pill-btn is-active" data-diff="easy">🌱 やさしい</button>
-            <button type="button" class="pill-btn" data-diff="exact">🎯 ぴったり</button>
-            <button type="button" class="pill-btn" data-diff="ear">👂 みみクイズ</button>
+      <div class="game-stage-root game-quest">
+        <div class="stage-hud-top">
+          <div class="hud-group">
+            <span class="hud-chip">⭐ <span class="js-score">0</span></span>
+            <span class="hud-chip hud-chip-combo">🔥 <span class="js-combo">0</span></span>
           </div>
-          <div class="quest-stats">
-            <span class="stat-badge">⭐ <span class="js-score">0</span></span>
-            <span class="stat-badge stat-combo">🔥 <span class="js-combo">0</span> コンボ</span>
+          <div class="hud-group hud-popover-anchor">
+            <button type="button" class="hud-chip hud-chip-btn js-opt-toggle" aria-expanded="false">
+              <span class="js-diff-label">🌱 やさしい</span> ▾
+            </button>
+            <div class="stage-popover is-hidden js-opt-popover" role="dialog" aria-label="むずかしさ">
+              <div class="popover-title">むずかしさ</div>
+              <div class="popover-list">
+                ${DIFFS.map(
+                  (d) => `
+                    <button type="button" class="popover-item ${d.id === difficulty ? 'is-active' : ''}" data-diff="${d.id}">
+                      <span class="popover-item-main">${d.icon} ${d.label}</span>
+                      <span class="popover-item-sub">${d.desc}</span>
+                    </button>
+                  `
+                ).join('')}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -67,7 +86,29 @@ export const starQuestGame = {
     const feedbackEl = ctx.container.querySelector('.js-feedback');
     const listenBtn = ctx.container.querySelector('.js-listen-btn');
     const skipBtn = ctx.container.querySelector('.js-skip-btn');
-    const diffBtns = ctx.container.querySelectorAll('.pill-btn');
+    const optToggle = ctx.container.querySelector('.js-opt-toggle');
+    const optPopover = ctx.container.querySelector('.js-opt-popover');
+    const diffLabelEl = ctx.container.querySelector('.js-diff-label');
+    const diffBtns = ctx.container.querySelectorAll('[data-diff]');
+
+    const closePopover = () => {
+      optPopover.classList.add('is-hidden');
+      optToggle.setAttribute('aria-expanded', 'false');
+    };
+
+    optToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = optPopover.classList.contains('is-hidden');
+      optPopover.classList.toggle('is-hidden', !willOpen);
+      optToggle.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    const onDocClick = (e) => {
+      if (!optPopover.contains(e.target) && e.target !== optToggle) {
+        closePopover();
+      }
+    };
+    document.addEventListener('click', onDocClick);
 
     const renderTrack = () => {
       const filled = score % 10;
@@ -84,7 +125,7 @@ export const starQuestGame = {
 
     const pickNextTarget = ({ playDemo = true } = {}) => {
       const pool = difficulty === 'easy'
-        ? [60, 62, 64, 65, 67, 69, 71] // C4〜B4
+        ? [60, 62, 64, 65, 67, 69, 71]
         : QUEST_NOTES_C4_C5;
       let next = targetMidi;
       let guard = 0;
@@ -129,8 +170,11 @@ export const starQuestGame = {
     diffBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         difficulty = btn.dataset.diff;
+        const found = DIFFS.find((d) => d.id === difficulty) || DIFFS[0];
+        diffLabelEl.textContent = `${found.icon} ${found.label}`;
         diffBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
         feedbackEl.className = 'quest-feedback';
+        closePopover();
         pickNextTarget({ playDemo: true });
       });
     });
@@ -207,6 +251,7 @@ export const starQuestGame = {
 
       unmount() {
         if (nextTimer) clearTimeout(nextTimer);
+        document.removeEventListener('click', onDocClick);
         ctx.setHintKeys([]);
       },
     };

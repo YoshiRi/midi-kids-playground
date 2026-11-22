@@ -7,19 +7,42 @@ const audio = new KidsAudioEngine();
 const midi = new MidiManager();
 
 const els = {
-  gameTabs: document.getElementById('game-tabs'),
+  // Topbar
+  gameSwitcherBtn: document.getElementById('game-switcher-btn'),
+  currentGameIcon: document.getElementById('current-game-icon'),
+  currentGameTitle: document.getElementById('current-game-title'),
+  midiStatusBtn: document.getElementById('midi-status-btn'),
+  midiStatusText: document.getElementById('midi-status-text'),
+  quickMuteBtn: document.getElementById('quick-mute-btn'),
+  settingsOpenBtn: document.getElementById('settings-open-btn'),
+
+  // Stage & Keyboard
   stageContainer: document.getElementById('stage-container'),
   keyboardContainer: document.getElementById('keyboard-container'),
-  midiStatusBadge: document.getElementById('midi-status-badge'),
-  midiDeviceSelect: document.getElementById('midi-device-select'),
-  midiLastNote: document.getElementById('midi-last-note'),
+  audioUnlockBanner: document.getElementById('audio-unlock-banner'),
+  audioUnlockBtn: document.getElementById('audio-unlock-btn'),
+
+  // Game Sheet
+  gameSheet: document.getElementById('game-sheet'),
+  gameSheetClose: document.getElementById('game-sheet-close'),
+  gameSheetGrid: document.getElementById('game-sheet-grid'),
+
+  // Settings Drawer
+  settingsDrawer: document.getElementById('settings-drawer'),
+  settingsCloseBtn: document.getElementById('settings-close-btn'),
   soundSelect: document.getElementById('sound-select'),
-  rangeToggle: document.getElementById('range-toggle'),
+  muteToggle: document.getElementById('mute-toggle'),
+  soundTestBtn: document.getElementById('sound-test-btn'),
+  rangeBtns: document.querySelectorAll('[data-range]'),
+  kbSizeBtns: document.querySelectorAll('[data-kbsize]'),
   labelToggle: document.getElementById('label-toggle'),
   pcHintToggle: document.getElementById('pc-hint-toggle'),
-  muteToggle: document.getElementById('mute-toggle'),
-  ipadBanner: document.getElementById('ipad-banner'),
-  ipadBannerClose: document.getElementById('ipad-banner-close'),
+  drawerMidiStatus: document.getElementById('drawer-midi-status'),
+  midiDeviceRow: document.getElementById('midi-device-row'),
+  midiDeviceSelect: document.getElementById('midi-device-select'),
+  midiLastNote: document.getElementById('midi-last-note'),
+
+  // Help Modal
   helpOpenBtns: document.querySelectorAll('.js-open-help'),
   helpModal: document.getElementById('help-modal'),
   helpCloseBtn: document.getElementById('help-close-btn'),
@@ -27,7 +50,6 @@ const els = {
 
 let activeGameId = GAMES[0].id;
 let activeGameInstance = null;
-let isTwoOctave = false;
 
 // iOS/iPadOS Safari は touchstart / touchend / click の同期ハンドラ内でないと
 // Web Audio API とメディアオーディオセッションのロックが解除されないため全イベントで捕捉する
@@ -86,6 +108,21 @@ const keyboard = new VisualKeyboard(els.keyboardContainer, {
 midi.onNoteOn(handleNoteOn);
 midi.onNoteOff(handleNoteOff);
 
+// オーバーレイ開閉ユーティリティ
+function setOverlayOpen(backdropEl, isOpen, triggerBtn) {
+  backdropEl.classList.toggle('is-open', isOpen);
+  backdropEl.setAttribute('aria-hidden', String(!isOpen));
+  if (triggerBtn) {
+    triggerBtn.setAttribute('aria-expanded', String(isOpen));
+  }
+}
+
+function closeAllOverlays() {
+  setOverlayOpen(els.gameSheet, false, els.gameSwitcherBtn);
+  setOverlayOpen(els.settingsDrawer, false, els.settingsOpenBtn);
+  setOverlayOpen(els.helpModal, false);
+}
+
 // ゲーム切り替え
 function mountGame(gameId) {
   const game = getGameById(gameId);
@@ -97,11 +134,14 @@ function mountGame(gameId) {
   activeGameInstance = null;
   els.stageContainer.innerHTML = '';
 
-  // タブのアクティブ状態更新
-  els.gameTabs.querySelectorAll('.game-tab').forEach((tab) => {
-    const isActive = tab.dataset.gameId === game.id;
-    tab.classList.toggle('is-active', isActive);
-    tab.setAttribute('aria-selected', String(isActive));
+  // トップバーの現在ゲーム表示を更新
+  els.currentGameIcon.textContent = game.icon;
+  els.currentGameTitle.textContent = game.title;
+  els.gameSwitcherBtn.style.setProperty('--switcher-accent', game.accentColor);
+
+  // ゲーム選択シートの選択状態更新
+  els.gameSheetGrid.querySelectorAll('.game-card').forEach((card) => {
+    card.classList.toggle('is-active', card.dataset.gameId === game.id);
   });
 
   activeGameInstance = game.mount({
@@ -113,57 +153,138 @@ function mountGame(gameId) {
   });
 }
 
-// ゲームタブ生成
-function renderGameTabs() {
-  els.gameTabs.innerHTML = GAMES.map(
+function renderGameSheet() {
+  els.gameSheetGrid.innerHTML = GAMES.map(
     (g) => `
       <button
         type="button"
-        class="game-tab"
-        role="tab"
+        class="game-card"
         data-game-id="${g.id}"
-        style="--tab-accent: ${g.accentColor}"
+        style="--card-accent: ${g.accentColor}"
       >
-        <span class="game-tab-icon">${g.icon}</span>
-        <span class="game-tab-text">
-          <span class="game-tab-title">${g.title}</span>
-          <span class="game-tab-age">${g.ageLabel}</span>
+        <span class="game-card-icon">${g.icon}</span>
+        <span class="game-card-body">
+          <span class="game-card-top">
+            <span class="game-card-title">${g.title}</span>
+            <span class="game-card-age">${g.ageLabel}</span>
+          </span>
+          <span class="game-card-sub">${g.subtitle}</span>
         </span>
       </button>
     `
   ).join('');
 
-  els.gameTabs.querySelectorAll('.game-tab').forEach((btn) => {
-    btn.addEventListener('click', () => {
+  els.gameSheetGrid.querySelectorAll('.game-card').forEach((card) => {
+    card.addEventListener('click', () => {
       audio.unlock();
-      mountGame(btn.dataset.gameId);
+      mountGame(card.dataset.gameId);
+      setOverlayOpen(els.gameSheet, false, els.gameSwitcherBtn);
     });
   });
 }
 
-// 音色セレクタ生成
+function syncMuteUI(muted) {
+  els.quickMuteBtn.textContent = muted ? '🔇' : '🔊';
+  els.quickMuteBtn.classList.toggle('is-muted', muted);
+  els.muteToggle.textContent = muted ? '🔇 おと OFF' : '🔊 おと ON';
+  els.muteToggle.classList.toggle('is-active', !muted);
+  els.muteToggle.classList.toggle('is-muted', muted);
+}
+
 function initControls() {
+  // ゲーム切替シート
+  els.gameSwitcherBtn.addEventListener('click', () => {
+    const willOpen = !els.gameSheet.classList.contains('is-open');
+    closeAllOverlays();
+    setOverlayOpen(els.gameSheet, willOpen, els.gameSwitcherBtn);
+  });
+  els.gameSheetClose.addEventListener('click', () => setOverlayOpen(els.gameSheet, false, els.gameSwitcherBtn));
+  els.gameSheet.addEventListener('click', (e) => {
+    if (e.target === els.gameSheet) setOverlayOpen(els.gameSheet, false, els.gameSwitcherBtn);
+  });
+
+  // 設定ドロワー
+  els.settingsOpenBtn.addEventListener('click', () => {
+    const willOpen = !els.settingsDrawer.classList.contains('is-open');
+    closeAllOverlays();
+    setOverlayOpen(els.settingsDrawer, willOpen, els.settingsOpenBtn);
+  });
+  els.settingsCloseBtn.addEventListener('click', () => setOverlayOpen(els.settingsDrawer, false, els.settingsOpenBtn));
+  els.settingsDrawer.addEventListener('click', (e) => {
+    if (e.target === els.settingsDrawer) setOverlayOpen(els.settingsDrawer, false, els.settingsOpenBtn);
+  });
+
+  // 接続ガイドモーダル
+  els.helpOpenBtns.forEach((btn) =>
+    btn.addEventListener('click', () => {
+      closeAllOverlays();
+      setOverlayOpen(els.helpModal, true);
+    })
+  );
+  els.helpCloseBtn.addEventListener('click', () => setOverlayOpen(els.helpModal, false));
+  els.helpModal.addEventListener('click', (e) => {
+    if (e.target === els.helpModal) setOverlayOpen(els.helpModal, false);
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAllOverlays();
+  });
+
+  // 音色
   els.soundSelect.innerHTML = SOUND_PRESETS.map(
     (p) => `<option value="${p.id}">${p.label}</option>`
   ).join('');
-
   els.soundSelect.addEventListener('change', () => {
     audio.unlock();
     audio.setPreset(els.soundSelect.value);
     audio.playDemoNote(60, 260, 0.55);
   });
 
-  els.rangeToggle.addEventListener('click', () => {
-    isTwoOctave = !isTwoOctave;
-    if (isTwoOctave) {
-      keyboard.setRange(48, 72); // C3 〜 C5
-      els.rangeToggle.textContent = '🎹 2オクターブ';
-    } else {
-      keyboard.setRange(60, 72); // C4 〜 C5
-      els.rangeToggle.textContent = '🎹 1オクターブ';
+  // ミュート（トップバー＆ドロワー同期）
+  let muted = false;
+  const toggleMute = () => {
+    muted = !muted;
+    audio.setMuted(muted);
+    syncMuteUI(muted);
+  };
+  els.quickMuteBtn.addEventListener('click', toggleMute);
+  els.muteToggle.addEventListener('click', toggleMute);
+
+  // テスト音
+  els.soundTestBtn.addEventListener('click', () => {
+    audio.unlock();
+    if (muted) {
+      muted = false;
+      audio.setMuted(false);
+      syncMuteUI(false);
     }
+    audio.playSfx('combo');
   });
 
+  // オクターブ範囲
+  els.rangeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const range = btn.dataset.range;
+      els.rangeBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+      if (range === '2oct') {
+        keyboard.setRange(48, 72);
+      } else {
+        keyboard.setRange(60, 72);
+      }
+    });
+  });
+
+  // 鍵盤の高さ（スリム / ふつう / おおきめ）
+  els.kbSizeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const size = btn.dataset.kbsize;
+      els.kbSizeBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+      els.keyboardContainer.classList.remove('is-size-slim', 'is-size-normal', 'is-size-large');
+      els.keyboardContainer.classList.add(`is-size-${size}`);
+    });
+  });
+
+  // ドレミ表示 / PCキー表示
   let showLabels = true;
   els.labelToggle.addEventListener('click', () => {
     showLabels = !showLabels;
@@ -178,49 +299,17 @@ function initControls() {
     els.pcHintToggle.classList.toggle('is-active', showPcHints);
   });
 
-  let muted = false;
-  els.muteToggle.addEventListener('click', () => {
-    muted = !muted;
-    audio.setMuted(muted);
-    els.muteToggle.textContent = muted ? '🔇 おとOFF' : '🔊 おとON';
-    els.muteToggle.classList.toggle('is-muted', muted);
-  });
-
+  // MIDIデバイス選択
   els.midiDeviceSelect.addEventListener('change', () => {
     midi.setSelectedInput(els.midiDeviceSelect.value);
   });
 
-  // ヘルプモーダル
-  const openHelp = () => {
-    els.helpModal.classList.add('is-open');
-    els.helpModal.setAttribute('aria-hidden', 'false');
-  };
-  const closeHelp = () => {
-    els.helpModal.classList.remove('is-open');
-    els.helpModal.setAttribute('aria-hidden', 'true');
-  };
-
-  els.helpOpenBtns.forEach((btn) => btn.addEventListener('click', openHelp));
-  els.helpCloseBtn.addEventListener('click', closeHelp);
-  els.helpModal.addEventListener('click', (e) => {
-    if (e.target === els.helpModal) closeHelp();
-  });
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeHelp();
-  });
-
-  if (els.ipadBannerClose) {
-    els.ipadBannerClose.addEventListener('click', () => {
-      els.ipadBanner.classList.add('is-hidden');
-    });
-  }
-
+  // 音声アンロックフローティングボタン
   if (els.audioUnlockBtn) {
-    const handleUnlockTap = () => {
+    els.audioUnlockBtn.addEventListener('click', () => {
       audio.unlock();
       audio.playSfx('combo');
-    };
-    els.audioUnlockBtn.addEventListener('click', handleUnlockTap);
+    });
   }
 
   audio.onStateChange((state) => {
@@ -229,26 +318,26 @@ function initControls() {
   });
 }
 
-// MIDI接続ステータス表示
+// MIDI接続ステータス表示（トップバーは最小表示、詳細はドロワー内）
 midi.onStatusChange((state) => {
   if (!state.supported) {
-    els.midiStatusBadge.className = 'midi-badge is-touch';
-    els.midiStatusBadge.textContent = '📱 タッチ鍵盤モード';
-    els.midiDeviceSelect.classList.add('is-hidden');
-    if (isIPadOrIOS() && els.ipadBanner) {
-      els.ipadBanner.classList.remove('is-hidden');
-    }
+    els.midiStatusBtn.className = 'midi-pill is-touch js-open-help';
+    els.midiStatusText.textContent = isIPadOrIOS() ? 'タッチ鍵盤' : 'タッチ鍵盤';
+    els.drawerMidiStatus.textContent = isIPadOrIOS()
+      ? '📱 タッチ鍵盤モード（iPadでMIDIキーボードを使うには「Web MIDI Browser」で開いてください）'
+      : '📱 このブラウザは Web MIDI 未対応のためタッチ鍵盤モードです。';
+    els.midiDeviceRow.classList.add('is-hidden');
     return;
   }
 
   if (state.connectedCount > 0) {
-    els.midiStatusBadge.className = 'midi-badge is-connected';
-    const first = state.inputs[0].name;
-    els.midiStatusBadge.textContent = state.connectedCount === 1
-      ? `🎹 MIDI接続中: ${first}`
-      : `🎹 MIDI接続中 (${state.connectedCount}台)`;
-
-    els.midiDeviceSelect.classList.remove('is-hidden');
+    els.midiStatusBtn.className = 'midi-pill is-connected js-open-help';
+    els.midiStatusText.textContent = state.connectedCount === 1
+      ? 'MIDI接続中'
+      : `MIDI (${state.connectedCount})`;
+    const names = state.inputs.map((i) => i.name).join(' / ');
+    els.drawerMidiStatus.textContent = `🎹 接続中: ${names}`;
+    els.midiDeviceRow.classList.remove('is-hidden');
     const options = [
       `<option value="all">すべてのMIDI (${state.connectedCount})</option>`,
       ...state.inputs.map((inp) => `<option value="${inp.id}">${inp.name}</option>`),
@@ -256,18 +345,20 @@ midi.onStatusChange((state) => {
     els.midiDeviceSelect.innerHTML = options.join('');
     els.midiDeviceSelect.value = state.selectedInputId;
   } else if (state.status === 'error') {
-    els.midiStatusBadge.className = 'midi-badge is-warn';
-    els.midiStatusBadge.textContent = '⚠️ MIDI許可が必要';
-    els.midiDeviceSelect.classList.add('is-hidden');
+    els.midiStatusBtn.className = 'midi-pill is-warn js-open-help';
+    els.midiStatusText.textContent = 'MIDI未許可';
+    els.drawerMidiStatus.textContent = `⚠️ ${state.errorMessage || 'MIDIへのアクセスが許可されませんでした'}`;
+    els.midiDeviceRow.classList.add('is-hidden');
   } else {
-    els.midiStatusBadge.className = 'midi-badge is-waiting';
-    els.midiStatusBadge.textContent = '🔌 MIDI待機中（さすと自動接続）';
-    els.midiDeviceSelect.classList.add('is-hidden');
+    els.midiStatusBtn.className = 'midi-pill is-waiting js-open-help';
+    els.midiStatusText.textContent = 'MIDI待機';
+    els.drawerMidiStatus.textContent = '🔌 MIDIキーボードを接続すると自動で認識します。';
+    els.midiDeviceRow.classList.add('is-hidden');
   }
 });
 
 // 初期化
-renderGameTabs();
+renderGameSheet();
 initControls();
 mountGame(activeGameId);
 midi.connect();

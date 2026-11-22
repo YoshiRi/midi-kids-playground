@@ -1,9 +1,15 @@
 /**
  * ミニゲーム1: はなび＆どうぶつパーティー (2〜5さい向け)
- * どの鍵盤を押しても花火・どうぶつ・シャボン玉が飛び出して楽しく反応！
+ * UIルール準拠: Canvasをステージ100%全面表示し、HUDとモード選択はフローティング配置
  */
 
 const ANIMALS = ['🐶', '🐱', '🐰', '🐻', '🐼', '🦁', '🐸', '🐥', '🦄', '🦖', '🦋', '🐳'];
+
+const MODES = [
+  { id: 'party', icon: '🎆', label: 'はなび＆どうぶつ' },
+  { id: 'animals', icon: '🐾', label: 'どうぶついっぱい' },
+  { id: 'bubbles', icon: '🫧', label: 'シャボンだま' },
+];
 
 export const fireworksPartyGame = {
   id: 'fireworks-party',
@@ -14,47 +20,87 @@ export const fireworksPartyGame = {
   accentColor: '#ff595e',
 
   mount(ctx) {
-    let mode = 'party'; // 'party' | 'animals' | 'bubbles'
+    let mode = 'party';
     let noteCount = 0;
     let recentTimestamps = [];
 
     ctx.container.innerHTML = `
-      <div class="game-fireworks">
-        <div class="game-toolbar">
-          <div class="mode-pills" role="group" aria-label="あそびモード">
-            <button type="button" class="pill-btn is-active" data-mode="party">🎆 はなび＆どうぶつ</button>
-            <button type="button" class="pill-btn" data-mode="animals">🐾 どうぶついっぱい</button>
-            <button type="button" class="pill-btn" data-mode="bubbles">🫧 シャボンだま</button>
+      <div class="game-stage-root game-fireworks">
+        <canvas class="stage-canvas"></canvas>
+
+        <div class="stage-hud-top">
+          <div class="hud-group">
+            <span class="hud-chip">🎵 <span class="js-count">0</span></span>
           </div>
-          <div class="stat-badge">🎵 <span class="js-count">0</span> おと</div>
+          <div class="hud-group hud-popover-anchor">
+            <button type="button" class="hud-chip hud-chip-btn js-opt-toggle" aria-expanded="false">
+              <span class="js-mode-label">🎆 はなび＆どうぶつ</span> ▾
+            </button>
+            <div class="stage-popover is-hidden js-opt-popover" role="dialog" aria-label="あそびモード">
+              <div class="popover-title">あそびモード</div>
+              <div class="popover-list">
+                ${MODES.map(
+                  (m) => `
+                    <button type="button" class="popover-item ${m.id === mode ? 'is-active' : ''}" data-mode="${m.id}">
+                      <span>${m.icon} ${m.label}</span>
+                    </button>
+                  `
+                ).join('')}
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="stage-canvas-wrap">
-          <canvas class="stage-canvas"></canvas>
-          <div class="stage-overlay-hint js-empty-hint">
-            <div class="hint-big">🎹 けんばんを おしてみよう！</div>
-            <div class="hint-sub">つよく おすと おおきく とびだすよ✨</div>
-          </div>
+
+        <div class="stage-overlay-hint js-empty-hint">
+          <div class="hint-big">🎹 けんばんを おしてみよう！</div>
+          <div class="hint-sub">つよく おすと おおきく とびだすよ✨</div>
         </div>
       </div>
     `;
 
+    const root = ctx.container.querySelector('.game-stage-root');
     const canvas = ctx.container.querySelector('.stage-canvas');
     const c = canvas.getContext('2d');
     const countEl = ctx.container.querySelector('.js-count');
     const emptyHint = ctx.container.querySelector('.js-empty-hint');
-    const modeButtons = ctx.container.querySelectorAll('.pill-btn');
+    const optToggle = ctx.container.querySelector('.js-opt-toggle');
+    const optPopover = ctx.container.querySelector('.js-opt-popover');
+    const modeLabelEl = ctx.container.querySelector('.js-mode-label');
+    const modeButtons = ctx.container.querySelectorAll('[data-mode]');
+
+    const closePopover = () => {
+      optPopover.classList.add('is-hidden');
+      optToggle.setAttribute('aria-expanded', 'false');
+    };
+
+    optToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = optPopover.classList.contains('is-hidden');
+      optPopover.classList.toggle('is-hidden', !willOpen);
+      optToggle.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    const onDocClick = (e) => {
+      if (!optPopover.contains(e.target) && e.target !== optToggle) {
+        closePopover();
+      }
+    };
+    document.addEventListener('click', onDocClick);
 
     modeButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         mode = btn.dataset.mode;
+        const found = MODES.find((m) => m.id === mode) || MODES[0];
+        modeLabelEl.textContent = `${found.icon} ${found.label}`;
         modeButtons.forEach((b) => b.classList.toggle('is-active', b === btn));
+        closePopover();
       });
     });
 
     // 背景の星
     const bgStars = Array.from({ length: 42 }, () => ({
       x: Math.random(),
-      y: Math.random() * 0.85,
+      y: Math.random() * 0.88,
       r: 1 + Math.random() * 2.2,
       phase: Math.random() * Math.PI * 2,
       speed: 1.2 + Math.random() * 2.2,
@@ -67,12 +113,12 @@ export const fireworksPartyGame = {
     const labels = [];
 
     let width = 800;
-    let height = 360;
+    let height = 400;
     const resize = () => {
-      const rect = canvas.parentElement.getBoundingClientRect();
+      const rect = root.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       width = Math.max(300, rect.width);
-      height = Math.max(200, rect.height);
+      height = Math.max(180, rect.height);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -80,7 +126,7 @@ export const fireworksPartyGame = {
     resize();
 
     const ro = new ResizeObserver(resize);
-    ro.observe(canvas.parentElement);
+    ro.observe(root);
 
     const spawnFirework = (x, y, color, colorLight, power) => {
       const count = Math.round(22 + power * 24);
@@ -194,7 +240,6 @@ export const fireworksPartyGame = {
     const tick = () => {
       time += 0.016;
 
-      // 背景グラデーション
       const grad = c.createLinearGradient(0, 0, 0, height);
       if (mode === 'bubbles') {
         grad.addColorStop(0, '#143266');
@@ -206,7 +251,6 @@ export const fireworksPartyGame = {
       c.fillStyle = grad;
       c.fillRect(0, 0, width, height);
 
-      // 背景のキラキラ星
       for (const s of bgStars) {
         const a = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(time * s.speed + s.phase));
         c.fillStyle = `rgba(255, 250, 220, ${a.toFixed(2)})`;
@@ -215,7 +259,6 @@ export const fireworksPartyGame = {
         c.fill();
       }
 
-      // 広がるリング
       for (let i = rings.length - 1; i >= 0; i--) {
         const ring = rings[i];
         ring.r += (ring.maxR - ring.r) * 0.1 + 1.5;
@@ -234,7 +277,6 @@ export const fireworksPartyGame = {
         c.restore();
       }
 
-      // シャボン玉
       for (let i = bubbles.length - 1; i >= 0; i--) {
         const b = bubbles[i];
         b.wobblePhase += 0.07;
@@ -268,7 +310,6 @@ export const fireworksPartyGame = {
         c.restore();
       }
 
-      // 花火パーティクル
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx;
@@ -293,7 +334,6 @@ export const fireworksPartyGame = {
         }
       }
 
-      // ジャンプする動物たち
       for (let i = critters.length - 1; i >= 0; i--) {
         const cr = critters[i];
         cr.life++;
@@ -319,7 +359,6 @@ export const fireworksPartyGame = {
         c.restore();
       }
 
-      // フワッと浮かぶ音名テキスト
       for (let i = labels.length - 1; i >= 0; i--) {
         const lb = labels[i];
         lb.y += lb.vy;
@@ -353,7 +392,6 @@ export const fireworksPartyGame = {
         countEl.textContent = String(noteCount);
         if (emptyHint) emptyHint.classList.add('is-hidden');
 
-        // 鍵盤の位置に合わせる（画面外オクターブでも自然な横位置へマッピング）
         let normX = ctx.keyboard.getKeyNormalizedX(noteInfo.midi);
         if (normX <= 0.02 || normX >= 0.98) {
           normX = 0.1 + ((noteInfo.midi - 36) / 48) * 0.8;
@@ -384,7 +422,6 @@ export const fireworksPartyGame = {
           alpha: 1,
         });
 
-        // 同時押し（和音）で虹色コンボ！
         const now = performance.now();
         recentTimestamps = recentTimestamps.filter((t) => now - t < 240);
         recentTimestamps.push(now);
@@ -399,6 +436,7 @@ export const fireworksPartyGame = {
       unmount() {
         cancelAnimationFrame(rafId);
         ro.disconnect();
+        document.removeEventListener('click', onDocClick);
         ctx.setHintKeys([]);
       },
     };

@@ -46,6 +46,8 @@ python3 -m http.server 8000
 
 ## 🧩 新しいミニゲームを追加する（プレイグラウンドの使い方）
 
+> 📐 **UI 設計ルール**: メニューやオプションを追加してもメインステージと鍵盤が圧迫されないよう、[docs/UI_GUIDELINES.md](./docs/UI_GUIDELINES.md) の「3層レイアウト＋フローティングHUD / オーバーレイ設定」ルールに沿って実装してください。
+
 1. `src/games/myNewGame.js` を作成します。
 2. 以下のテンプレート形式でゲームオブジェクトを export します。
 
@@ -59,13 +61,20 @@ export const myNewGame = {
   accentColor: '#8ac926',
 
   mount(ctx) {
-    // ctx.container : ステージDOM要素
+    // ctx.container : ステージDOM要素（100%全面）
     // ctx.audio     : シンセ・効果音 (playDemoNote, playSfx)
     // ctx.keyboard  : 画面鍵盤 (getKeyNormalizedX など)
     // ctx.midi      : MIDIマネージャ
     // ctx.setHintKeys([60, 64], { ignoreOctave: true }) : ガイド発光
 
-    ctx.container.innerHTML = `<div style="padding:24px">鍵盤を押してみよう！</div>`;
+    ctx.container.innerHTML = `
+      <div class="game-stage-root">
+        <div class="stage-hud-top">
+          <div class="hud-group"><span class="hud-chip">⭐ 0</span></div>
+        </div>
+        <!-- ここにCanvasやメイン演出を全面配置 -->
+      </div>
+    `;
 
     return {
       onNoteOn(noteInfo, source) {
@@ -81,7 +90,7 @@ export const myNewGame = {
 };
 ```
 
-3. `src/core/gameRegistry.js` の `GAMES` 配列に追加すると、自動で上部タブに並びます！
+3. `src/core/gameRegistry.js` の `GAMES` 配列に追加すると、左上のゲーム切り替えシートに自動で並びます！
 
 ---
 
@@ -91,8 +100,10 @@ export const myNewGame = {
 midi-kids-playground/
 ├── index.html                 # メインUI + 接続ガイドモーダル
 ├── manifest.json              # iPadホーム画面追加用PWA設定
-├── styles/main.css            # キッズ向けレスポンシブCSS
-├── docs/IPAD_SETUP.md         # PC / iPad MIDI接続ガイド
+├── styles/main.css            # キッズ向けレスポンシブCSS（3層構造＋オーバーレイ）
+├── docs/
+│   ├── IPAD_SETUP.md          # PC / Android / iPad MIDI接続ガイド
+│   └── UI_GUIDELINES.md       # UI設計ルール（非圧迫3層レイアウト契約）
 └── src/
     ├── main.js                # アプリ初期化・入力ルーティング
     ├── core/

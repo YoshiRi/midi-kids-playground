@@ -2,17 +2,13 @@ import { getNoteInfo, matchesNote } from '../core/notes.js';
 
 /**
  * ミニゲーム3: おちてくるノーツ・リズムえんそう (5さい〜向け)
- * - まつモード（Wait Mode）: 弾くまで待ってくれるから幼児でも必ず最後まで弾ける！
- * - リズムモード（Flow Mode）: 一定テンポで落ちてくるノーツをタイミングよく弾く！
+ * UIルール準拠: Canvasをステージ100%全面表示し、曲・モード・はやさはフローティングポップオーバーに集約
  */
 
 const C4 = 60, D4 = 62, E4 = 64, F4 = 65, G4 = 67, A4 = 69, B4 = 71, C5 = 72;
 
-/**
- * [midiNote, durationBeats] の配列から開始拍(beat)付きノーツ配列を生成
- */
 function buildNotes(pattern) {
-  let beat = 1.5; // スタート前の準備拍
+  let beat = 1.5;
   return pattern.map(([midi, dur = 1], idx) => {
     const item = { id: idx, midi, beat, dur };
     beat += dur;
@@ -78,6 +74,12 @@ const SONGS = [
   },
 ];
 
+const SPEEDS = [
+  { rate: 0.65, label: '超ゆっくり' },
+  { rate: 0.85, label: 'ゆっくり' },
+  { rate: 1.05, label: 'ふつう' },
+];
+
 export const rhythmFallGame = {
   id: 'rhythm-fall',
   title: 'リズムえんそう',
@@ -89,7 +91,8 @@ export const rhythmFallGame = {
   mount(ctx) {
     let selectedSong = SONGS[0];
     let playMode = 'wait'; // 'wait' | 'flow'
-    let speedRate = 0.85;  // 0.7 | 0.85 | 1.05
+    let speedIdx = 1;
+    let speedRate = SPEEDS[speedIdx].rate;
     let ignoreOctave = true;
 
     let state = 'ready'; // 'ready' | 'playing' | 'finished'
@@ -107,60 +110,109 @@ export const rhythmFallGame = {
     const confetti = [];
 
     ctx.container.innerHTML = `
-      <div class="game-rhythm">
-        <div class="game-toolbar rhythm-toolbar">
-          <div class="rhythm-controls-left">
-            <select class="select-pill js-song-select" aria-label="きょくをえらぶ">
-              ${SONGS.map((s) => `<option value="${s.id}">${s.title}</option>`).join('')}
-            </select>
-            <div class="mode-pills" role="group" aria-label="えんそうモード">
-              <button type="button" class="pill-btn is-active" data-rmode="wait">🐢 まつモード</button>
-              <button type="button" class="pill-btn" data-rmode="flow">🚀 リズムモード</button>
-            </div>
-            <button type="button" class="pill-btn js-speed-btn" title="はやさをかえる">はやさ: ゆっくり</button>
+      <div class="game-stage-root game-rhythm">
+        <canvas class="stage-canvas"></canvas>
+
+        <div class="stage-hud-top">
+          <div class="hud-group">
+            <span class="hud-chip">🌟 <span class="js-score">0</span></span>
+            <span class="hud-chip hud-chip-combo">🔥 <span class="js-combo">0</span></span>
           </div>
-          <div class="rhythm-stats">
-            <span class="stat-badge">🌟 <span class="js-score">0</span></span>
-            <span class="stat-badge stat-combo">🔥 <span class="js-combo">0</span></span>
-            <button type="button" class="action-btn action-btn-sm js-start-btn">▶ スタート</button>
+
+          <div class="hud-group hud-popover-anchor">
+            <button type="button" class="hud-chip hud-chip-btn js-restart-btn is-hidden" title="さいしょから やりなおす">
+              🔄
+            </button>
+            <button type="button" class="hud-chip hud-chip-btn js-opt-toggle" aria-expanded="false">
+              🎛️ <span class="js-opt-summary">${selectedSong.title}</span> ▾
+            </button>
+
+            <div class="stage-popover is-hidden js-opt-popover" role="dialog" aria-label="きょく・モードせってい">
+              <div class="popover-title">きょくを えらぶ</div>
+              <div class="popover-list">
+                ${SONGS.map(
+                  (s) => `
+                    <button type="button" class="popover-item ${s.id === selectedSong.id ? 'is-active' : ''}" data-song="${s.id}">
+                      <span>${s.title}</span>
+                    </button>
+                  `
+                ).join('')}
+              </div>
+
+              <div class="popover-divider"></div>
+              <div class="popover-title">えんそうモード</div>
+              <div class="popover-segmented">
+                <button type="button" class="seg-btn is-active" data-rmode="wait">🐢 まつ</button>
+                <button type="button" class="seg-btn" data-rmode="flow">🚀 リズム</button>
+              </div>
+
+              <div class="popover-title popover-title-spaced">はやさ</div>
+              <div class="popover-segmented">
+                ${SPEEDS.map(
+                  (sp, i) => `
+                    <button type="button" class="seg-btn ${i === speedIdx ? 'is-active' : ''}" data-speed="${i}">${sp.label}</button>
+                  `
+                ).join('')}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="stage-canvas-wrap rhythm-canvas-wrap">
-          <canvas class="stage-canvas"></canvas>
-          <div class="rhythm-overlay js-overlay">
-            <div class="overlay-card js-overlay-card">
-              <div class="overlay-title js-overlay-title">⭐ きらきらぼし</div>
-              <div class="overlay-desc js-overlay-desc">
-                🐢 まつモード：ひかる けんばんを おすまで まってくれるよ！
-              </div>
-              <button type="button" class="action-btn action-btn-lg js-big-start">🎹 えんそう スタート！</button>
+        <div class="rhythm-overlay js-overlay">
+          <div class="overlay-card">
+            <div class="overlay-title js-overlay-title">${selectedSong.title}</div>
+            <div class="overlay-desc js-overlay-desc">
+              🐢 まつモード：ひかる けんばんを おすまで まってくれるよ！
             </div>
+            <button type="button" class="action-btn action-btn-lg js-big-start">🎹 えんそう スタート！</button>
           </div>
         </div>
       </div>
     `;
 
+    const root = ctx.container.querySelector('.game-stage-root');
     const canvas = ctx.container.querySelector('.stage-canvas');
     const c = canvas.getContext('2d');
-    const songSelect = ctx.container.querySelector('.js-song-select');
-    const modeBtns = ctx.container.querySelectorAll('[data-rmode]');
-    const speedBtn = ctx.container.querySelector('.js-speed-btn');
     const scoreEl = ctx.container.querySelector('.js-score');
     const comboEl = ctx.container.querySelector('.js-combo');
-    const startBtn = ctx.container.querySelector('.js-start-btn');
+    const restartBtn = ctx.container.querySelector('.js-restart-btn');
+    const optToggle = ctx.container.querySelector('.js-opt-toggle');
+    const optSummary = ctx.container.querySelector('.js-opt-summary');
+    const optPopover = ctx.container.querySelector('.js-opt-popover');
+    const songBtns = ctx.container.querySelectorAll('[data-song]');
+    const modeBtns = ctx.container.querySelectorAll('[data-rmode]');
+    const speedBtns = ctx.container.querySelectorAll('[data-speed]');
     const overlayEl = ctx.container.querySelector('.js-overlay');
     const overlayTitle = ctx.container.querySelector('.js-overlay-title');
     const overlayDesc = ctx.container.querySelector('.js-overlay-desc');
     const bigStartBtn = ctx.container.querySelector('.js-big-start');
 
+    const closePopover = () => {
+      optPopover.classList.add('is-hidden');
+      optToggle.setAttribute('aria-expanded', 'false');
+    };
+
+    optToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = optPopover.classList.contains('is-hidden');
+      optPopover.classList.toggle('is-hidden', !willOpen);
+      optToggle.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    const onDocClick = (e) => {
+      if (!optPopover.contains(e.target) && e.target !== optToggle) {
+        closePopover();
+      }
+    };
+    document.addEventListener('click', onDocClick);
+
     let width = 800;
-    let height = 340;
+    let height = 380;
     const resize = () => {
-      const rect = canvas.parentElement.getBoundingClientRect();
+      const rect = root.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       width = Math.max(300, rect.width);
-      height = Math.max(200, rect.height);
+      height = Math.max(180, rect.height);
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -168,23 +220,26 @@ export const rhythmFallGame = {
     resize();
 
     const ro = new ResizeObserver(resize);
-    ro.observe(canvas.parentElement);
+    ro.observe(root);
 
     const updateReadyCard = () => {
+      optSummary.textContent = selectedSong.title;
       overlayTitle.textContent = selectedSong.title;
       overlayDesc.textContent = playMode === 'wait'
         ? '🐢 まつモード：ひかる けんばんを おすまで まってくれるよ！'
         : '🚀 リズムモード：せんに かさなったら タイミングよく おそう！';
       bigStartBtn.textContent = '🎹 えんそう スタート！';
       overlayEl.classList.remove('is-hidden');
+      restartBtn.classList.add('is-hidden');
     };
 
     const startSong = () => {
       ctx.audio.unlock();
+      closePopover();
       notes = selectedSong.notes.map((n) => ({
         ...n,
         info: getNoteInfo(n.midi),
-        status: 'pending', // 'pending' | 'hit' | 'missed'
+        status: 'pending',
       }));
       currentBeat = 0;
       score = 0;
@@ -199,8 +254,8 @@ export const rhythmFallGame = {
       comboEl.textContent = '0';
       state = 'playing';
       lastFrameTime = performance.now();
-      startBtn.textContent = '🔄 やりなおす';
       overlayEl.classList.add('is-hidden');
+      restartBtn.classList.remove('is-hidden');
       syncHintKey();
     };
 
@@ -216,7 +271,6 @@ export const rhythmFallGame = {
       bigStartBtn.textContent = '🔁 もういっかい ひく！';
       overlayEl.classList.remove('is-hidden');
 
-      // 紙吹雪
       const colors = ['#ff595e', '#ff924c', '#ffca3a', '#8ac926', '#1982c4', '#ff66b3'];
       for (let i = 0; i < 65; i++) {
         confetti.push({
@@ -271,12 +325,15 @@ export const rhythmFallGame = {
       });
     };
 
-    songSelect.addEventListener('change', () => {
-      selectedSong = SONGS.find((s) => s.id === songSelect.value) || SONGS[0];
-      state = 'ready';
-      ctx.setHintKeys([]);
-      startBtn.textContent = '▶ スタート';
-      updateReadyCard();
+    songBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        selectedSong = SONGS.find((s) => s.id === btn.dataset.song) || SONGS[0];
+        songBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+        state = 'ready';
+        ctx.setHintKeys([]);
+        closePopover();
+        updateReadyCard();
+      });
     });
 
     modeBtns.forEach((btn) => {
@@ -287,38 +344,32 @@ export const rhythmFallGame = {
       });
     });
 
-    const SPEEDS = [
-      { rate: 0.65, label: 'はやさ: 超ゆっくり' },
-      { rate: 0.85, label: 'はやさ: ゆっくり' },
-      { rate: 1.05, label: 'はやさ: ふつう' },
-    ];
-    let speedIdx = 1;
-    speedBtn.addEventListener('click', () => {
-      speedIdx = (speedIdx + 1) % SPEEDS.length;
-      speedRate = SPEEDS[speedIdx].rate;
-      speedBtn.textContent = SPEEDS[speedIdx].label;
+    speedBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        speedIdx = Number(btn.dataset.speed) || 0;
+        speedRate = SPEEDS[speedIdx].rate;
+        speedBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+      });
     });
 
-    startBtn.addEventListener('click', startSong);
+    restartBtn.addEventListener('click', startSong);
     bigStartBtn.addEventListener('click', startSong);
 
-    const visibleBeats = 4.2; // 画面上端からヒットラインまで何拍分見えるか
+    const visibleBeats = 4.2;
     let rafId = 0;
 
     const tick = (now) => {
       const dtSec = Math.min(0.05, (now - lastFrameTime) / 1000);
       lastFrameTime = now;
 
-      const hitY = height - 42;
-      const pixelsPerBeat = (hitY - 22) / visibleBeats;
+      const hitY = height - 40;
+      const pixelsPerBeat = (hitY - 26) / visibleBeats;
 
-      // 曲の進行
       if (state === 'playing') {
         const beatsPerSec = (selectedSong.bpm / 60) * speedRate;
         const nextPending = getNextPendingNote();
 
         if (playMode === 'wait' && nextPending && currentBeat >= nextPending.beat) {
-          // 弾くまでヒットラインでピタッと待つ！
           currentBeat = nextPending.beat;
           waitingNoteId = nextPending.id;
         } else {
@@ -326,7 +377,6 @@ export const rhythmFallGame = {
           currentBeat += dtSec * beatsPerSec;
         }
 
-        // リズムモードでの見送り判定
         if (playMode === 'flow') {
           for (const n of notes) {
             if (n.status === 'pending' && currentBeat - n.beat > 0.72) {
@@ -339,7 +389,6 @@ export const rhythmFallGame = {
 
         syncHintKey();
 
-        // 終了チェック
         const allDone = notes.every((n) => n.status !== 'pending');
         const lastBeat = notes.length > 0 ? notes[notes.length - 1].beat : 0;
         if (allDone && (playMode === 'wait' || currentBeat > lastBeat + 1.0)) {
@@ -347,14 +396,12 @@ export const rhythmFallGame = {
         }
       }
 
-      // 背景描画
       const bgGrad = c.createLinearGradient(0, 0, 0, height);
       bgGrad.addColorStop(0, '#14183d');
       bgGrad.addColorStop(1, '#232459');
       c.fillStyle = bgGrad;
       c.fillRect(0, 0, width, height);
 
-      // 白鍵レーンガイド線
       const laneNotes = [C4, D4, E4, F4, G4, A4, B4, C5];
       for (const m of laneNotes) {
         const lx = ctx.keyboard.getKeyNormalizedX(m) * width;
@@ -366,7 +413,6 @@ export const rhythmFallGame = {
         c.lineTo(lx, hitY);
         c.stroke();
 
-        // ヒットライン上のターゲット丸枠
         c.fillStyle = `${info.color}28`;
         c.strokeStyle = `${info.color}77`;
         c.lineWidth = 2;
@@ -376,7 +422,6 @@ export const rhythmFallGame = {
         c.stroke();
       }
 
-      // ヒットライン本体
       c.strokeStyle = 'rgba(255, 255, 255, 0.55)';
       c.lineWidth = 3;
       c.beginPath();
@@ -384,16 +429,15 @@ export const rhythmFallGame = {
       c.lineTo(width - 12, hitY);
       c.stroke();
 
-      // 進捗バー（上部）
+      // 最上部に薄い進捗バー
       if (notes.length > 0) {
         const progress = notes.filter((n) => n.status !== 'pending').length / notes.length;
-        c.fillStyle = 'rgba(255,255,255,0.14)';
-        c.fillRect(14, 10, width - 28, 7);
+        c.fillStyle = 'rgba(255,255,255,0.12)';
+        c.fillRect(0, 0, width, 4);
         c.fillStyle = '#ffca3a';
-        c.fillRect(14, 10, (width - 28) * progress, 7);
+        c.fillRect(0, 0, width * progress, 4);
       }
 
-      // ノーツ描画
       const pulse = 0.5 + 0.5 * Math.sin(now * 0.01);
       for (const n of notes) {
         if (n.status !== 'pending') continue;
@@ -405,7 +449,6 @@ export const rhythmFallGame = {
         const isWaiting = waitingNoteId === n.id;
         const radius = isWaiting ? 24 + pulse * 4 : 21;
 
-        // 待ち状態の光輪
         if (isWaiting) {
           c.save();
           c.strokeStyle = '#ffffff';
@@ -417,7 +460,6 @@ export const rhythmFallGame = {
           c.restore();
         }
 
-        // ノーツ本体（カラフルな円＋ハイライト）
         c.save();
         c.fillStyle = n.info.color;
         c.shadowColor = n.info.color;
@@ -439,7 +481,6 @@ export const rhythmFallGame = {
         c.restore();
       }
 
-      // ヒットパーティクル
       for (let i = bursts.length - 1; i >= 0; i--) {
         const b = bursts[i];
         b.x += b.vx;
@@ -459,7 +500,6 @@ export const rhythmFallGame = {
         c.restore();
       }
 
-      // 判定ポップアップ文字
       for (let i = popups.length - 1; i >= 0; i--) {
         const p = popups[i];
         p.y += p.vy;
@@ -481,7 +521,6 @@ export const rhythmFallGame = {
         c.restore();
       }
 
-      // クリア紙吹雪
       for (const cf of confetti) {
         cf.x += cf.vx;
         cf.y += cf.vy;
@@ -506,11 +545,10 @@ export const rhythmFallGame = {
       onNoteOn(noteInfo) {
         if (state !== 'playing') return;
 
-        const hitY = height - 42;
+        const hitY = height - 40;
         const nextPending = getNextPendingNote();
         if (!nextPending) return;
 
-        // まつモード: 現在の次ノーツ（少し先押しも許容）
         if (playMode === 'wait') {
           const canHitNow = nextPending.beat - currentBeat <= 1.1;
           if (canHitNow && matchesNote(noteInfo.midi, nextPending.midi, { ignoreOctave })) {
@@ -530,7 +568,6 @@ export const rhythmFallGame = {
           return;
         }
 
-        // リズムモード: ヒットウィンドウ内の最も近い一致ノーツを探す
         const candidates = notes.filter(
           (n) =>
             n.status === 'pending' &&
@@ -562,6 +599,7 @@ export const rhythmFallGame = {
       unmount() {
         cancelAnimationFrame(rafId);
         ro.disconnect();
+        document.removeEventListener('click', onDocClick);
         ctx.setHintKeys([]);
       },
     };
