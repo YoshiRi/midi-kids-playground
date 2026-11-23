@@ -6,6 +6,7 @@ import { MidiManager } from '../src/core/midi.js';
 import { GAMES, getGameById } from '../src/core/gameRegistry.js';
 import { SONGS, getSongById, splitIntoPhrases } from '../src/data/songs.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storage.js';
+import { PROGRESSIONS, KEYS, buildChord, resolveProgression, evaluateChordMatch } from '../src/data/chords.js';
 
 test('notes.js: MIDI周波数と音名・ドレミ変換', () => {
   assert.equal(Math.round(midiToFreq(69)), 440);
@@ -55,7 +56,7 @@ test('midi.js: NoteOn / NoteOff / vel=0 メッセージ解析', () => {
 });
 
 test('gameRegistry.js: 全ミニゲームが有効なプラグイン契約を満たす', () => {
-  assert.equal(GAMES.length, 3);
+  assert.ok(GAMES.length >= 5);
   const ids = new Set();
   for (const g of GAMES) {
     assert.ok(g.id && typeof g.id === 'string');
@@ -110,4 +111,37 @@ test('storage.js: 設定の保存・復元と壊れたJSONへの耐性', () => {
   // 壊れたJSONでもデフォルトへ安全にフォールバック
   mockStorage.setItem('mkp:settings', '{invalid-json');
   assert.deepEqual(loadSettings(mockStorage), DEFAULT_SETTINGS);
+});
+
+test('chords.js: コード生成・移調・転回形判定・全進行の整合性', () => {
+  const cmaj = buildChord(0, 'maj');
+  assert.equal(cmaj.symbol, 'C');
+  assert.deepEqual(cmaj.pitchClasses, [0, 4, 7]);
+
+  const am7 = buildChord(9, 'm7');
+  assert.equal(am7.symbol, 'Am7');
+  assert.deepEqual(am7.pitchClasses, [9, 0, 4, 7]);
+
+  // 転回形（E3, G4, C5）でも C メジャーと完全一致すること
+  const invMatch = evaluateChordMatch([52, 67, 72], cmaj.pitchClasses);
+  assert.equal(invMatch.isExact, true);
+  assert.equal(invMatch.hasAllTargets, true);
+
+  // 構成音不足と構成外音の検出
+  const partial = evaluateChordMatch([60, 64, 65], cmaj.pitchClasses);
+  assert.equal(partial.isExact, false);
+  assert.deepEqual(partial.missing, [7]);
+  assert.deepEqual(partial.extras, [5]);
+
+  // 全進行 × 全キーでエラーなく展開できること
+  for (const p of PROGRESSIONS) {
+    for (const k of KEYS) {
+      const resolved = resolveProgression(p.id, k.id);
+      assert.equal(resolved.length, p.steps.length);
+      for (const ch of resolved) {
+        assert.ok(ch.symbol.length > 0);
+        assert.ok(ch.voicing.length >= 3);
+      }
+    }
+  }
 });

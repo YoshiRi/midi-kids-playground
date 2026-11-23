@@ -627,6 +627,222 @@ body {
   justify-content: center;
 }
 
+.stage-popover-wide {
+  width: min(300px, 84vw);
+  max-height: min(68dvh, 420px);
+}
+
+.popover-grid-keys {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.28);
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.sheet-category-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #ffde7d;
+  padding: 4px 4px 0;
+  letter-spacing: 0.03em;
+}
+
+.sheet-category-label:not(:first-child) {
+  margin-top: 8px;
+}
+
+/* Adult Mode: Chord & Ear Training Stage */
+.chord-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  padding: 46px 14px 12px;
+  gap: 6px;
+  background: radial-gradient(circle at 50% 20%, #2b2768 0%, #141538 78%);
+}
+
+.chord-timeline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 96%;
+}
+
+.timeline-caption {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #d6dcff;
+  text-align: center;
+}
+
+.timeline-chord {
+  --chord-color: #9b72ff;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 56px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.7);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.timeline-chord.is-done {
+  background: color-mix(in srgb, var(--chord-color) 42%, #191b42);
+  border-color: color-mix(in srgb, var(--chord-color) 75%, white);
+  color: #ffffff;
+}
+
+.timeline-chord.is-current {
+  background: color-mix(in srgb, var(--chord-color) 32%, #24285e);
+  border-color: var(--chord-color);
+  color: #ffffff;
+  transform: scale(1.1);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--chord-color) 65%, transparent);
+}
+
+.tl-deg {
+  font-size: 0.65rem;
+  font-weight: 800;
+  opacity: 0.82;
+}
+
+.tl-sym {
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.chord-card {
+  --chord-color: #9b72ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: min(360px, 88vw);
+  padding: 12px 24px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--chord-color) 20%, #1e2150);
+  border: 3px solid var(--chord-color);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--chord-color) 35%, transparent);
+  text-align: center;
+}
+
+.chord-card.is-pop {
+  animation: cardPop 0.42s ease;
+}
+
+.chord-card.is-shake {
+  animation: cardShake 0.35s ease;
+}
+
+.chord-degree {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #ffde7d;
+  letter-spacing: 0.04em;
+}
+
+.chord-symbol {
+  font-size: clamp(2.1rem, 5.2vw, 3.3rem);
+  font-weight: 900;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+
+.chord-tones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tone-pill {
+  --tone-color: #6c72cb;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1.5px solid color-mix(in srgb, var(--tone-color) 70%, white);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  transition: transform 0.1s ease, background 0.12s ease;
+}
+
+.tone-pill small {
+  opacity: 0.82;
+  margin-left: 2px;
+  font-size: 0.72rem;
+}
+
+.tone-pill.is-hit {
+  background: #38c976;
+  border-color: #a6ffd0;
+  color: #0e2418;
+  transform: scale(1.08);
+}
+
+.tone-pill-hidden {
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #d6dcff;
+  font-size: 0.78rem;
+}
+
+.chord-choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  max-width: min(560px, 95vw);
+}
+
+.choice-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.12s ease;
+}
+
+.choice-btn small {
+  font-size: 0.7rem;
+  opacity: 0.78;
+}
+
+.choice-btn:active {
+  transform: scale(0.95);
+}
+
+.choice-btn.is-correct {
+  background: #38c976;
+  border-color: #a6ffd0;
+  color: #0d2217;
+}
+
+.choice-btn.is-wrong {
+  background: rgba(255, 89, 94, 0.32);
+  border-color: #ff595e;
+}
+
 /* Rhythm Overlay */
 .rhythm-overlay {
   position: absolute;

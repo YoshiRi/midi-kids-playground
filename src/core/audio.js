@@ -266,6 +266,143 @@ export class KidsAudioEngine {
     }
   }
 
+  /**
+   * 耳コピ・コード練習用の和音再生（arpeggioMs > 0 で分散和音再生）
+   * キャンセル関数を返す
+   */
+  playDemoChord(midiNotes, { durationMs = 900, arpeggioMs = 0, velocity = 0.56 } = {}) {
+    const ctx = this.ensureContext();
+    if (this.muted || !Array.isArray(midiNotes) || midiNotes.length === 0) {
+      return () => {};
+    }
+
+    const timers = [];
+    const voices = [];
+    let cancelled = false;
+
+    const startVoices = () => {
+      if (cancelled || this.muted) return;
+      midiNotes.forEach((m, idx) => {
+        const delay = arpeggioMs > 0 ? idx * arpeggioMs : 0;
+        const startTimer = setTimeout(() => {
+          if (cancelled || this.muted) return;
+          const now = ctx.currentTime;
+          const v = this._playPiano(ctx, midiToFreq(m), velocity, now);
+          voices.push(v);
+          const stopTimer = setTimeout(() => v.stop(), durationMs);
+          timers.push(stopTimer);
+        }, delay);
+        timers.push(startTimer);
+      });
+    };
+
+    if (ctx.state !== 'running') {
+      ctx
+        .resume()
+        .then(() => {
+          this._emitState();
+          startVoices();
+        })
+        .catch(() => {});
+    } else {
+      startVoices();
+    }
+
+    return () => {
+      cancelled = true;
+      timers.forEach((t) => clearTimeout(t));
+      voices.forEach((v) => v.stop());
+    };
+  }
+
+  /**
+   * 伴奏リズム練習用のゼロ依存ドラム＆メトロノーム音源
+   * @param {'kick' | 'snare' | 'hihat' | 'clickHigh' | 'clickLow'} type
+   * @param {number} volumeScale
+   */
+  playDrum(type, volumeScale = 1.0) {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (ctx.state !== 'running') return;
+
+    const now = ctx.currentTime;
+    const vol = Math.max(0.1, Math.min(1.2, volumeScale));
+
+    if (type === 'kick') {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(145, now);
+      osc.frequency.exponentialRampToValueAtTime(42, now + 0.11);
+      g.gain.setValueAtTime(0.55 * vol, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+      osc.connect(g);
+      g.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.21);
+    } else if (type === 'snare') {
+      // ノイズ成分 + スネア胴のトーン
+      const len = Math.floor(ctx.sampleRate * 0.14);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        ch[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.35));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buf;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1800;
+
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.32 * vol, now);
+      ng.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+
+      noise.connect(filter);
+      filter.connect(ng);
+      ng.connect(this.masterGain);
+      noise.start(now);
+
+      const tone = ctx.createOscillator();
+      const tg = ctx.createGain();
+      tone.type = 'triangle';
+      tone.frequency.setValueAtTime(190, now);
+      tone.frequency.exponentialRampToValueAtTime(110, now + 0.08);
+      tg.gain.setValueAtTime(0.2 * vol, now);
+      tg.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      tone.connect(tg);
+      tg.connect(this.masterGain);
+      tone.start(now);
+      tone.stop(now + 0.1);
+    } else if (type === 'hihat') {
+      const len = Math.floor(ctx.sampleRate * 0.045);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        ch[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.28));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buf;
+
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 6500;
+
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.16 * vol, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+      noise.connect(hp);
+      hp.connect(g);
+      g.connect(this.masterGain);
+      noise.start(now);
+    } else if (type === 'clickHigh' || type === 'clickLow') {
+      const freq = type === 'clickHigh' ? 1280 : 880;
+      this._beep(ctx, freq, now, 0.045, 0.16 * vol, 'triangle');
+    }
+  }
+
   _playPiano(ctx, freq, vel, now) {
     const out = ctx.createGain();
     const filter = ctx.createBiquadFilter();

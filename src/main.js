@@ -1,7 +1,7 @@
 import { KidsAudioEngine, SOUND_PRESETS } from './core/audio.js';
 import { MidiManager, isIPadOrIOS } from './core/midi.js';
 import { VisualKeyboard } from './core/keyboard.js';
-import { GAMES, getGameById } from './core/gameRegistry.js';
+import { GAMES, GAME_CATEGORIES, getGameById } from './core/gameRegistry.js';
 import { loadSettings, saveSettings } from './core/storage.js';
 
 const audio = new KidsAudioEngine();
@@ -157,8 +157,7 @@ function mountGame(gameId) {
 }
 
 function renderGameSheet() {
-  els.gameSheetGrid.innerHTML = GAMES.map(
-    (g) => `
+  const renderCard = (g) => `
       <button
         type="button"
         class="game-card"
@@ -174,8 +173,16 @@ function renderGameSheet() {
           <span class="game-card-sub">${g.subtitle}</span>
         </span>
       </button>
-    `
-  ).join('');
+    `;
+
+  els.gameSheetGrid.innerHTML = GAME_CATEGORIES.map((cat) => {
+    const items = GAMES.filter((g) => (g.category || 'kids') === cat.id);
+    if (items.length === 0) return '';
+    return `
+      <div class="sheet-category-label">${cat.label}</div>
+      ${items.map(renderCard).join('')}
+    `;
+  }).join('');
 
   els.gameSheetGrid.querySelectorAll('.game-card').forEach((card) => {
     card.addEventListener('click', () => {
