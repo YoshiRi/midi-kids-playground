@@ -403,6 +403,100 @@ export class KidsAudioEngine {
     }
   }
 
+  /**
+   * 伴奏バックトラック用の温かいシンセベース音
+   */
+  playBassNote(midiNote, durationMs = 340, velocity = 0.55) {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (ctx.state !== 'running') return;
+
+    const now = ctx.currentTime;
+    const dur = Math.max(0.08, durationMs / 1000);
+    const freq = midiToFreq(midiNote);
+    const vel = Math.max(0.15, Math.min(1, velocity));
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(520, now);
+    filter.frequency.exponentialRampToValueAtTime(220, now + dur);
+
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(freq, now);
+
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(freq * 0.5, now);
+
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.35;
+
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, now);
+    out.gain.linearRampToValueAtTime(0.42 * vel, now + 0.01);
+    out.gain.exponentialRampToValueAtTime(0.24 * vel, now + dur * 0.6);
+    out.gain.exponentialRampToValueAtTime(0.001, now + dur + 0.06);
+
+    osc1.connect(filter);
+    osc2.connect(g2);
+    g2.connect(filter);
+    filter.connect(out);
+    out.connect(this.masterGain);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + dur + 0.08);
+    osc2.stop(now + dur + 0.08);
+  }
+
+  /**
+   * 伴奏練習に添えるガイドメロディ用の抜けるシンセリード音
+   */
+  playLeadNote(midiNote, durationMs = 320, velocity = 0.45) {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (ctx.state !== 'running') return;
+
+    const now = ctx.currentTime;
+    const dur = Math.max(0.08, durationMs / 1000);
+    const freq = midiToFreq(midiNote);
+    const vel = Math.max(0.15, Math.min(1, velocity));
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2800, now);
+    filter.frequency.exponentialRampToValueAtTime(1400, now + dur);
+
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(freq, now);
+
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(freq * 2, now);
+
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.22;
+
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, now);
+    out.gain.linearRampToValueAtTime(0.3 * vel, now + 0.016);
+    out.gain.exponentialRampToValueAtTime(0.18 * vel, now + dur * 0.7);
+    out.gain.exponentialRampToValueAtTime(0.001, now + dur + 0.08);
+
+    osc1.connect(filter);
+    osc2.connect(g2);
+    g2.connect(filter);
+    filter.connect(out);
+    out.connect(this.masterGain);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + dur + 0.1);
+    osc2.stop(now + dur + 0.1);
+  }
+
   _playPiano(ctx, freq, vel, now) {
     const out = ctx.createGain();
     const filter = ctx.createBiquadFilter();

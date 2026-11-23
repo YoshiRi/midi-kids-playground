@@ -200,3 +200,77 @@ export function evaluateChordMatch(pressedMidis, targetPitchClasses) {
     extras,
   };
 }
+
+/**
+ * 指定キーのスケール構成音（ピッチクラス配列）を返す
+ * pentatonic=true: メジャーペンタトニック (1, 2, 3, 5, 6) — 外れ音ゼロでアドリブしやすい
+ * pentatonic=false: メジャースケール (全7音)
+ */
+export function getScalePitchClasses(keyId = 'C', { pentatonic = true } = {}) {
+  const key = getKeyById(keyId);
+  const intervals = pentatonic ? [0, 2, 4, 7, 9] : [0, 2, 4, 5, 7, 9, 11];
+  return intervals.map((iv) => (key.rootPc + iv) % 12);
+}
+
+/**
+ * 伴奏練習に添える、コード進行に音楽的に馴染む自動ガイドメロディを生成する
+ * - 1小節 = 8ステップ（8分音符）
+ * - 拍頭(step 0)はコードトーンに着地させ、近接音優先で歌える旋律線を作る
+ * @returns {Array<Array<{ step: number, midi: number, durSteps: number }>>} 小節ごとのメロディイベント配列
+ */
+export function generateProgressionMelodies(chords, keyId = 'C', seed = 0) {
+  const scalePcs = new Set(getScalePitchClasses(keyId, { pentatonic: true }));
+
+  // 歌いやすい8分音符リズムモチーフ（[開始ステップ, 長さ(ステップ)]）
+  const rhythmMotifs = [
+    [[0, 2], [2, 1], [3, 2], [5, 1], [6, 2]],
+    [[0, 3], [3, 1], [4, 2], [6, 2]],
+    [[0, 1], [1, 1], [2, 2], [4, 1], [5, 3]],
+    [[0, 2], [3, 2], [5, 1], [6, 2]],
+  ];
+
+  // 高音域（C5=72前後、C4の伴奏帯域と被りにくい範囲: MIDI 67..81）に候補音を用意
+  const minMidi = 67;
+  const maxMidi = 81;
+
+  // 再現可能な軽量擬似乱数
+  let rng = (seed * 9301 + 49297) % 233280;
+  const nextRand = () => {
+    rng = (rng * 9301 + 49297) % 233280;
+    return rng / 233280;
+  };
+
+  let prevMidi = 72 + getKeyById(keyId).rootPc;
+  if (prevMidi > maxMidi) prevMidi -= 12;
+
+  return chords.map((chord, barIdx) => {
+    const chordPcs = new Set(chord.pitchClasses);
+    const chordTones = [];
+    const melodicPool = [];
+
+    for (let m = minMidi; m <= maxMidi; m++) {
+      const pc = m % 12;
+      if (chordPcs.has(pc)) {
+        chordTones.push(m);
+        melodicPool.push(m);
+      } else if (scalePcs.has(pc)) {
+        melodicPool.push(m);
+      }
+    }
+
+    const motif = rhythmMotifs[(barIdx + seed) % rhythmMotifs.length];
+    const events = [];
+
+    motif.forEach(([step, durSteps], noteIdx) => {
+      const pool = noteIdx === 0 && chordTones.length > 0 ? chordTones : melodicPool;
+      // 前の音から近い候補（±5半音以内）を優先して自然な旋律線にする
+      const nearby = pool.filter((m) => Math.abs(m - prevMidi) <= 5 && m !== prevMidi);
+      const candidates = nearby.length > 0 ? nearby : pool;
+      const chosen = candidates[Math.floor(nextRand() * candidates.length)] ?? prevMidi;
+      prevMidi = chosen;
+      events.push({ step, midi: chosen, durSteps });
+    });
+
+    return events;
+  });
+}

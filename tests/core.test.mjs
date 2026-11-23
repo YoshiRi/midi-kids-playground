@@ -6,7 +6,15 @@ import { MidiManager } from '../src/core/midi.js';
 import { GAMES, getGameById } from '../src/core/gameRegistry.js';
 import { SONGS, getSongById, splitIntoPhrases } from '../src/data/songs.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storage.js';
-import { PROGRESSIONS, KEYS, buildChord, resolveProgression, evaluateChordMatch } from '../src/data/chords.js';
+import {
+  PROGRESSIONS,
+  KEYS,
+  buildChord,
+  resolveProgression,
+  evaluateChordMatch,
+  getScalePitchClasses,
+  generateProgressionMelodies,
+} from '../src/data/chords.js';
 
 test('notes.js: MIDI周波数と音名・ドレミ変換', () => {
   assert.equal(Math.round(midiToFreq(69)), 440);
@@ -133,7 +141,7 @@ test('chords.js: コード生成・移調・転回形判定・全進行の整合
   assert.deepEqual(partial.missing, [7]);
   assert.deepEqual(partial.extras, [5]);
 
-  // 全進行 × 全キーでエラーなく展開できること
+  // 全進行 × 全キーでエラーなく展開でき、ガイドメロディ生成も整合すること
   for (const p of PROGRESSIONS) {
     for (const k of KEYS) {
       const resolved = resolveProgression(p.id, k.id);
@@ -142,6 +150,18 @@ test('chords.js: コード生成・移調・転回形判定・全進行の整合
         assert.ok(ch.symbol.length > 0);
         assert.ok(ch.voicing.length >= 3);
       }
+
+      const melodies = generateProgressionMelodies(resolved, k.id, 1);
+      assert.equal(melodies.length, resolved.length);
+      for (let i = 0; i < melodies.length; i++) {
+        assert.ok(melodies[i].length >= 3);
+        // 拍頭は必ずコードトーンに着地すること
+        const firstNotePc = melodies[i][0].midi % 12;
+        assert.ok(resolved[i].pitchClasses.includes(firstNotePc));
+      }
     }
   }
+
+  assert.deepEqual(getScalePitchClasses('C', { pentatonic: true }), [0, 2, 4, 7, 9]);
+  assert.deepEqual(getScalePitchClasses('C', { pentatonic: false }), [0, 2, 4, 5, 7, 9, 11]);
 });

@@ -1,15 +1,18 @@
+import { getNoteInfo } from '../core/notes.js';
 import {
   KEYS,
   PROGRESSIONS,
   evaluateChordMatch,
+  generateProgressionMelodies,
   getProgressionById,
+  getScalePitchClasses,
   resolveProgression,
 } from '../data/chords.js';
 
 /**
- * ミニゲーム5（大人向け）: 伴奏リズム・グルーヴ練習
- * - ゼロ依存ドラム＆メトロノームビートに合わせてコード伴奏のリズム＆コードチェンジを練習
- * - 4つ打ち / ポップス8ビート（シンコペーション） / バラード / おしゃれシンコペ の4パターン
+ * ミニゲーム5（大人向け）: 伴奏リズム・グルーヴ＆セッション練習
+ * - 「🎹 伴奏を弾く」: ドラム＋ベース＋自動ガイドメロディに合わせてコードを刻む
+ * - 「🎷 メロディを弾く」: ドラム＋ベース＋自動コード伴奏バックトラックの上でメロディ/アドリブ演奏
  * - UIルール準拠: Canvas全面表示＋四隅フローティングHUD＆設定ポップオーバー
  */
 
@@ -18,7 +21,8 @@ const GROOVE_PATTERNS = [
     id: '4beat',
     label: '🎹 4つ打ち (1・2・3・4)',
     desc: '拍頭ごとにコードを刻む基本バッキング',
-    hitSteps: [0, 2, 4, 6], // 8分音符8ステップ (0=1, 1=1&, 2=2, 3=2&, 4=3, 5=3&, 6=4, 7=4&)
+    hitSteps: [0, 2, 4, 6],
+    bassSteps: [0, 4],
     drum: {
       0: ['kick', 'hihat'],
       1: ['hihat'],
@@ -35,6 +39,7 @@ const GROOVE_PATTERNS = [
     label: '🎸 ポップス 8ビート (1・2&・4)',
     desc: 'J-POPピアノ伴奏で定番のシンコペーション',
     hitSteps: [0, 3, 6],
+    bassSteps: [0, 3, 5],
     drum: {
       0: ['kick', 'hihat'],
       1: ['hihat'],
@@ -51,6 +56,7 @@ const GROOVE_PATTERNS = [
     label: '🌙 バラード (1・3拍)',
     desc: 'ゆったり2分音符でコードチェンジ練習',
     hitSteps: [0, 4],
+    bassSteps: [0, 4],
     drum: {
       0: ['kick', 'hihat'],
       2: ['hihat'],
@@ -63,6 +69,7 @@ const GROOVE_PATTERNS = [
     label: '☕ おしゃれシンコペ (1・2&・3&)',
     desc: '丸サ・ネオソウル系に合うハネ感リズム',
     hitSteps: [0, 3, 5],
+    bassSteps: [0, 5],
     drum: {
       0: ['kick', 'hihat'],
       1: ['hihat'],
@@ -83,37 +90,52 @@ export const compingGrooveGame = {
   id: 'comping-groove',
   category: 'adult',
   title: '伴奏リズム・グルーヴ',
-  subtitle: 'ドラムに合わせてコード伴奏とリズムを鍛える',
+  subtitle: 'ガイドメロディ付き伴奏 / 自動伴奏でメロディ演奏',
   ageLabel: 'オトナ学習',
   icon: '🥁',
   accentColor: '#38c976',
 
   mount(ctx) {
+    let role = 'comping'; // 'comping' (自分が伴奏) | 'melody' (自分がメロディ)
     let progId = PROGRESSIONS[0].id;
     let keyId = 'C';
-    let patternId = GROOVE_PATTERNS[1].id; // デフォルト: ポップス8ビート
+    let patternId = GROOVE_PATTERNS[1].id;
     let bpm = 90;
     let drumMode = 'drums'; // 'drums' | 'click'
-    let showGuide = true;
+    let guideMelodyOn = true; // 伴奏モード時に自動メロディを添える
+    let autoBassOn = true;
+    let melodyGuideType = 'penta'; // 'penta' | 'chord' | 'off' (メロディモード時の鍵盤ガイド)
+    let compingGuideOn = true;     // 伴奏モード時の鍵盤ガイド
+    let melodySeed = 1;
 
     let chords = resolveProgression(progId, keyId);
     let pattern = GROOVE_PATTERNS.find((p) => p.id === patternId) || GROOVE_PATTERNS[0];
+    let barMelodies = generateProgressionMelodies(chords, keyId, melodySeed);
 
     let isRunning = false;
-    let countInStepsLeft = 0; // 4拍カウントイン = 8ステップ
+    let countInStepsLeft = 0;
     let barIdx = 0;
-    let stepIdx = 0; // 0..7
+    let stepIdx = 0;
     let stepStartPerf = 0;
     let stepTimerId = null;
+    let activeBackingCancels = [];
+    let currentGuideMelodyNote = null; // Canvas表示用 { solfege, nameEn, color, step }
 
     let combo = 0;
     let totalJudged = 0;
     let totalGood = 0;
-    let hitMarkers = []; // { stepPos, label, color, alpha }
-    let stepHitDone = new Set(); // 現在の小節内で既にヒット判定済みのステップ
+    let soloNoteCount = 0;
+    let hitMarkers = [];
+    let soloBursts = [];
+    let stepHitDone = new Set();
     let lastNoteBurstTs = 0;
-    const recentChordBuffer = []; // 和音同時押しをまとめる短時間バッファ
+    const recentChordBuffer = [];
     const pressedNotes = new Set();
+
+    const cancelBackingChords = () => {
+      activeBackingCancels.forEach((fn) => fn());
+      activeBackingCancels = [];
+    };
 
     ctx.container.innerHTML = `
       <div class="game-stage-root game-groove">
@@ -121,18 +143,46 @@ export const compingGrooveGame = {
 
         <div class="stage-hud-top">
           <div class="hud-group">
-            <span class="hud-chip">🎯 <span class="js-acc">--%</span></span>
-            <span class="hud-chip hud-chip-combo">🔥 <span class="js-combo">0</span></span>
+            <span class="hud-chip js-stat-main">🎯 <span class="js-acc">--%</span></span>
+            <span class="hud-chip hud-chip-combo js-stat-sub">🔥 <span class="js-combo">0</span></span>
             <span class="hud-chip js-bpm-chip">♩=${bpm}</span>
           </div>
 
           <div class="hud-group hud-popover-anchor">
             <button type="button" class="hud-chip hud-chip-btn js-play-toggle">▶ スタート</button>
             <button type="button" class="hud-chip hud-chip-btn js-opt-toggle" aria-expanded="false">
-              🎛️ せってい ▾
+              🎛️ <span class="js-role-chip">🎹 伴奏</span> ▾
             </button>
 
-            <div class="stage-popover stage-popover-wide is-hidden js-opt-popover" role="dialog" aria-label="伴奏リズムせってい">
+            <div class="stage-popover stage-popover-wide is-hidden js-opt-popover" role="dialog" aria-label="セッションせってい">
+              <div class="popover-title">セッション役わり</div>
+              <div class="popover-segmented">
+                <button type="button" class="seg-btn is-active" data-role="comping">🎹 伴奏を弾く</button>
+                <button type="button" class="seg-btn" data-role="melody">🎷 メロディを弾く</button>
+              </div>
+
+              <!-- 伴奏モード専用オプション -->
+              <div class="js-comping-opts" style="margin-top:8px">
+                <div class="popover-segmented">
+                  <button type="button" class="seg-btn is-active js-melody-toggle">🎵 ガイドメロディ: ON</button>
+                  <button type="button" class="seg-btn js-reroll-melody" title="別のメロディを作る">🎲 かえる</button>
+                </div>
+                <button type="button" class="popover-item is-active js-gguide-toggle" style="margin-top:6px">
+                  <span>💡 鍵盤コードガイド: ON</span>
+                </button>
+              </div>
+
+              <!-- メロディモード専用オプション -->
+              <div class="js-melody-opts is-hidden" style="margin-top:8px">
+                <div class="popover-title">アドリブ鍵盤ガイド</div>
+                <div class="popover-segmented">
+                  <button type="button" class="seg-btn is-active" data-mguide="penta">ペンタ</button>
+                  <button type="button" class="seg-btn" data-mguide="chord">コード音</button>
+                  <button type="button" class="seg-btn" data-mguide="off">OFF</button>
+                </div>
+              </div>
+
+              <div class="popover-divider"></div>
               <div class="popover-title">リズムパターン</div>
               <div class="popover-list">
                 ${GROOVE_PATTERNS.map(
@@ -175,12 +225,10 @@ export const compingGrooveGame = {
 
               <div class="popover-divider"></div>
               <div class="popover-segmented">
-                <button type="button" class="seg-btn is-active js-drum-btn" data-dmode="drums">🥁 ドラム</button>
-                <button type="button" class="seg-btn js-drum-btn" data-dmode="click">⏱️ クリック</button>
+                <button type="button" class="seg-btn is-active" data-dmode="drums">🥁 ドラム</button>
+                <button type="button" class="seg-btn" data-dmode="click">⏱️ クリック</button>
+                <button type="button" class="seg-btn is-active js-bass-toggle">🎸 ベース</button>
               </div>
-              <button type="button" class="popover-item is-active js-gguide-toggle" style="margin-top:8px">
-                <span>💡 鍵盤ガイド: ON</span>
-              </button>
             </div>
           </div>
         </div>
@@ -190,17 +238,26 @@ export const compingGrooveGame = {
     const root = ctx.container.querySelector('.game-stage-root');
     const canvas = ctx.container.querySelector('.stage-canvas');
     const c = canvas.getContext('2d');
-    const accEl = ctx.container.querySelector('.js-acc');
-    const comboEl = ctx.container.querySelector('.js-combo');
+    const statMainEl = ctx.container.querySelector('.js-stat-main');
+    const statSubEl = ctx.container.querySelector('.js-stat-sub');
     const bpmChipEl = ctx.container.querySelector('.js-bpm-chip');
     const playToggleBtn = ctx.container.querySelector('.js-play-toggle');
     const optToggle = ctx.container.querySelector('.js-opt-toggle');
+    const roleChipEl = ctx.container.querySelector('.js-role-chip');
     const optPopover = ctx.container.querySelector('.js-opt-popover');
+    const compingOptsEl = ctx.container.querySelector('.js-comping-opts');
+    const melodyOptsEl = ctx.container.querySelector('.js-melody-opts');
+
+    const roleBtns = ctx.container.querySelectorAll('[data-role]');
+    const melodyToggleBtn = ctx.container.querySelector('.js-melody-toggle');
+    const rerollMelodyBtn = ctx.container.querySelector('.js-reroll-melody');
+    const mGuideBtns = ctx.container.querySelectorAll('[data-mguide]');
     const patBtns = ctx.container.querySelectorAll('[data-pat]');
     const bpmBtns = ctx.container.querySelectorAll('[data-bpm]');
     const keyBtns = ctx.container.querySelectorAll('[data-gkey]');
     const progBtns = ctx.container.querySelectorAll('[data-gprog]');
     const drumBtns = ctx.container.querySelectorAll('[data-dmode]');
+    const bassToggleBtn = ctx.container.querySelector('.js-bass-toggle');
     const guideBtn = ctx.container.querySelector('.js-gguide-toggle');
 
     const closePopover = () => {
@@ -238,19 +295,59 @@ export const compingGrooveGame = {
     const ro = new ResizeObserver(resize);
     ro.observe(root);
 
-    const getStepDurationMs = () => (60 / bpm / 2) * 1000; // 8分音符1ステップの長さ(ms)
+    const getStepDurationMs = () => (60 / bpm / 2) * 1000;
+
+    const rebuildProgression = () => {
+      chords = resolveProgression(progId, keyId);
+      barMelodies = generateProgressionMelodies(chords, keyId, melodySeed);
+      barIdx = barIdx % chords.length;
+      syncHintKeys();
+    };
+
+    const syncHudStats = () => {
+      if (role === 'comping') {
+        const acc = totalJudged > 0 ? `${Math.round((totalGood / totalJudged) * 100)}%` : '--%';
+        statMainEl.textContent = `🎯 ${acc}`;
+        statSubEl.textContent = `🔥 ${combo}`;
+      } else {
+        statMainEl.textContent = `🎷 ソロ中`;
+        statSubEl.textContent = `🎵 ${soloNoteCount}`;
+      }
+    };
 
     const syncHintKeys = () => {
-      if (!showGuide) {
-        ctx.setHintKeys([]);
-        return;
-      }
       const curChord = chords[barIdx % chords.length];
-      ctx.setHintKeys(curChord.voicing, { ignoreOctave: true });
+      if (role === 'comping') {
+        if (!compingGuideOn) {
+          ctx.setHintKeys([]);
+          return;
+        }
+        ctx.setHintKeys(curChord.voicing, { ignoreOctave: true });
+      } else {
+        if (melodyGuideType === 'off') {
+          ctx.setHintKeys([]);
+        } else if (melodyGuideType === 'chord') {
+          ctx.setHintKeys(curChord.voicing, { ignoreOctave: true });
+        } else {
+          // メジャーペンタトニック（C4基準のピッチクラスをガイド発光）
+          const pentaMidis = getScalePitchClasses(keyId, { pentatonic: true }).map((pc) => 60 + pc);
+          ctx.setHintKeys(pentaMidis, { ignoreOctave: true });
+        }
+      }
+    };
+
+    const syncRoleUI = () => {
+      roleChipEl.textContent = role === 'comping' ? '🎹 伴奏' : '🎷 メロディ';
+      compingOptsEl.classList.toggle('is-hidden', role !== 'comping');
+      melodyOptsEl.classList.toggle('is-hidden', role !== 'melody');
+      syncHudStats();
+      syncHintKeys();
     };
 
     const stopLoop = () => {
       isRunning = false;
+      cancelBackingChords();
+      currentGuideMelodyNote = null;
       if (stepTimerId) {
         clearTimeout(stepTimerId);
         stepTimerId = null;
@@ -262,9 +359,7 @@ export const compingGrooveGame = {
       if (!isRunning) return;
       const stepMs = getStepDurationMs();
 
-      // 現在のステップの音を鳴らす
       if (countInStepsLeft > 0) {
-        // カウントイン（2ステップ = 1拍ごとにクリック）
         if (countInStepsLeft % 2 === 0) {
           ctx.audio.playDrum(countInStepsLeft === 8 ? 'clickHigh' : 'clickLow', 0.9);
         }
@@ -272,7 +367,7 @@ export const compingGrooveGame = {
         countInStepsLeft--;
         if (countInStepsLeft === 0) {
           barIdx = 0;
-          stepIdx = -1; // 次ステップで 0 になる
+          stepIdx = -1;
           stepHitDone.clear();
           syncHintKeys();
         }
@@ -281,15 +376,54 @@ export const compingGrooveGame = {
         if (stepIdx === 0 && stepStartPerf > 0) {
           barIdx = (barIdx + 1) % chords.length;
           stepHitDone.clear();
+          currentGuideMelodyNote = null;
           syncHintKeys();
         }
         stepStartPerf = performance.now();
 
+        const curChord = chords[barIdx % chords.length];
+
+        // 1. ドラム / クリック
         if (drumMode === 'drums') {
           const hits = pattern.drum[stepIdx] || [];
-          hits.forEach((d) => ctx.audio.playDrum(d, stepIdx === 0 ? 1.0 : 0.82));
+          hits.forEach((d) => ctx.audio.playDrum(d, stepIdx === 0 ? 1.0 : 0.8));
         } else if (stepIdx % 2 === 0) {
           ctx.audio.playDrum(stepIdx === 0 ? 'clickHigh' : 'clickLow', 0.85);
+        }
+
+        // 2. 自動ベースライン（ルート音を低音域 C2〜B2 = MIDI 36..47 で鳴らす）
+        if (autoBassOn && pattern.bassSteps.includes(stepIdx)) {
+          const bassMidi = 36 + curChord.rootPc;
+          ctx.audio.playBassNote(bassMidi, stepMs * 1.9, stepIdx === 0 ? 0.62 : 0.46);
+        }
+
+        // 3. 役割ごとの自動パート
+        if (role === 'comping' && guideMelodyOn) {
+          // ガイドメロディを添える
+          const barEvents = barMelodies[barIdx % barMelodies.length] || [];
+          const ev = barEvents.find((e) => e.step === stepIdx);
+          if (ev) {
+            ctx.audio.playLeadNote(ev.midi, Math.max(180, ev.durSteps * stepMs * 0.9), 0.46);
+            const info = getNoteInfo(ev.midi);
+            currentGuideMelodyNote = {
+              solfege: info.solfege,
+              nameEn: info.nameEn,
+              color: info.color,
+              step: stepIdx,
+            };
+          }
+        } else if (role === 'melody') {
+          // アプリがコード伴奏を自動で刻む（バックトラック）
+          if (pattern.hitSteps.includes(stepIdx)) {
+            // 低めボイシング（C3〜B4付近）に下げて主役メロディの邪魔をしないようにする
+            const backingMidis = curChord.voicing.map((m) => (m >= 68 ? m - 12 : m));
+            const cancel = ctx.audio.playDemoChord(backingMidis, {
+              durationMs: Math.round(stepMs * 1.85),
+              velocity: 0.34,
+            });
+            activeBackingCancels.push(cancel);
+            if (activeBackingCancels.length > 6) activeBackingCancels.shift();
+          }
         }
       }
 
@@ -301,17 +435,18 @@ export const compingGrooveGame = {
       closePopover();
       stopLoop();
       isRunning = true;
-      countInStepsLeft = 8; // 4拍カウントイン
+      countInStepsLeft = 8;
       barIdx = 0;
       stepIdx = 0;
       stepStartPerf = 0;
       combo = 0;
       totalJudged = 0;
       totalGood = 0;
+      soloNoteCount = 0;
       hitMarkers = [];
+      soloBursts = [];
       stepHitDone.clear();
-      comboEl.textContent = '0';
-      accEl.textContent = '--%';
+      syncHudStats();
       playToggleBtn.textContent = '⏹ ストップ';
       syncHintKeys();
       scheduleNextStep();
@@ -320,6 +455,36 @@ export const compingGrooveGame = {
     playToggleBtn.addEventListener('click', () => {
       if (isRunning) stopLoop();
       else startLoop();
+    });
+
+    roleBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        role = btn.dataset.role;
+        roleBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+        cancelBackingChords();
+        currentGuideMelodyNote = null;
+        syncRoleUI();
+      });
+    });
+
+    melodyToggleBtn.addEventListener('click', () => {
+      guideMelodyOn = !guideMelodyOn;
+      melodyToggleBtn.classList.toggle('is-active', guideMelodyOn);
+      melodyToggleBtn.textContent = `🎵 ガイドメロディ: ${guideMelodyOn ? 'ON' : 'OFF'}`;
+      if (!guideMelodyOn) currentGuideMelodyNote = null;
+    });
+
+    rerollMelodyBtn.addEventListener('click', () => {
+      melodySeed++;
+      barMelodies = generateProgressionMelodies(chords, keyId, melodySeed);
+    });
+
+    mGuideBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        melodyGuideType = btn.dataset.mguide;
+        mGuideBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
+        syncHintKeys();
+      });
     });
 
     patBtns.forEach((btn) => {
@@ -343,8 +508,7 @@ export const compingGrooveGame = {
       btn.addEventListener('click', () => {
         keyId = btn.dataset.gkey;
         keyBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
-        chords = resolveProgression(progId, keyId);
-        syncHintKeys();
+        rebuildProgression();
       });
     });
 
@@ -352,9 +516,8 @@ export const compingGrooveGame = {
       btn.addEventListener('click', () => {
         progId = btn.dataset.gprog;
         progBtns.forEach((b) => b.classList.toggle('is-active', b === btn));
-        chords = resolveProgression(progId, keyId);
         barIdx = 0;
-        syncHintKeys();
+        rebuildProgression();
         closePopover();
       });
     });
@@ -366,10 +529,15 @@ export const compingGrooveGame = {
       });
     });
 
+    bassToggleBtn.addEventListener('click', () => {
+      autoBassOn = !autoBassOn;
+      bassToggleBtn.classList.toggle('is-active', autoBassOn);
+    });
+
     guideBtn.addEventListener('click', () => {
-      showGuide = !showGuide;
-      guideBtn.classList.toggle('is-active', showGuide);
-      guideBtn.innerHTML = `<span>💡 鍵盤ガイド: ${showGuide ? 'ON' : 'OFF'}</span>`;
+      compingGuideOn = !compingGuideOn;
+      guideBtn.classList.toggle('is-active', compingGuideOn);
+      guideBtn.innerHTML = `<span>💡 鍵盤コードガイド: ${compingGuideOn ? 'ON' : 'OFF'}</span>`;
       syncHintKeys();
     });
 
@@ -381,21 +549,19 @@ export const compingGrooveGame = {
       } else {
         combo = 0;
       }
-      comboEl.textContent = String(combo);
-      accEl.textContent = `${Math.round((totalGood / totalJudged) * 100)}%`;
+      syncHudStats();
 
       hitMarkers.push({ stepPos, label, color, alpha: 1.0, yOffset: 0 });
       if (hitMarkers.length > 24) hitMarkers.shift();
     };
 
     const evaluateStrike = () => {
-      if (!isRunning || countInStepsLeft > 0 || stepIdx < 0) return;
+      if (role !== 'comping' || !isRunning || countInStepsLeft > 0 || stepIdx < 0) return;
 
       const stepMs = getStepDurationMs();
       const elapsedInStep = Math.max(0, Math.min(stepMs, performance.now() - stepStartPerf));
-      const exactStepPos = stepIdx + elapsedInStep / stepMs; // 0..8
+      const exactStepPos = stepIdx + elapsedInStep / stepMs;
 
-      // 最も近いターゲットステップを探す（小節またぎ考慮）
       let bestStep = pattern.hitSteps[0];
       let bestDiffSteps = 99;
       for (const s of pattern.hitSteps) {
@@ -429,27 +595,60 @@ export const compingGrooveGame = {
       }
     };
 
+    const spawnSoloVisual = (noteInfo) => {
+      const curChord = chords[barIdx % chords.length];
+      const majorScaleSet = new Set(getScalePitchClasses(keyId, { pentatonic: false }));
+      const chordSet = new Set(curChord.pitchClasses);
+
+      let badge = '♪ テンション';
+      if (chordSet.has(noteInfo.pitchClass)) badge = '◎ コード音!';
+      else if (majorScaleSet.has(noteInfo.pitchClass)) badge = '○ スケール';
+
+      let normX = ctx.keyboard.getKeyNormalizedX(noteInfo.midi);
+      if (normX <= 0.02 || normX >= 0.98) {
+        normX = 0.12 + (noteInfo.pitchClass / 12) * 0.76;
+      }
+
+      soloBursts.push({
+        x: Math.max(0.08, Math.min(0.92, normX)) * width,
+        y: height - 34,
+        vy: -1.8,
+        r: 12,
+        maxR: 48,
+        color: noteInfo.color,
+        text: `${noteInfo.solfege} ${badge}`,
+        alpha: 1,
+      });
+      if (soloBursts.length > 24) soloBursts.shift();
+    };
+
     let rafId = 0;
 
     const tick = (now) => {
-      // 背景グラデーション
       const bg = c.createLinearGradient(0, 0, 0, height);
-      bg.addColorStop(0, '#121735');
-      bg.addColorStop(1, '#1c244d');
+      if (role === 'melody') {
+        bg.addColorStop(0, '#14173b');
+        bg.addColorStop(1, '#261d4f');
+      } else {
+        bg.addColorStop(0, '#121735');
+        bg.addColorStop(1, '#1c244d');
+      }
       c.fillStyle = bg;
       c.fillRect(0, 0, width, height);
 
       const curChord = chords[barIdx % chords.length];
       const nextChord = chords[(barIdx + 1) % chords.length];
 
-      // 進行名（上部中央にうっすら）
-      c.fillStyle = 'rgba(200, 210, 255, 0.55)';
+      // 上部進行サマリ
+      c.fillStyle = 'rgba(200, 210, 255, 0.58)';
       c.font = '700 12px "Hiragino Maru Gothic ProN", sans-serif';
       c.textAlign = 'center';
       c.textBaseline = 'middle';
-      c.fillText(`${getProgressionById(progId).title}  |  Key: ${keyId}`, width / 2, 26);
+      const roleSub = role === 'comping'
+        ? (guideMelodyOn ? '🎹 伴奏（メロディ付き）' : '🎹 伴奏')
+        : '🎷 メロディ演奏（自動伴奏）';
+      c.fillText(`${roleSub}  |  ${getProgressionById(progId).title}  |  Key: ${keyId}`, width / 2, 26);
 
-      // 現在コードカード & 次コード予告
       const headerY = Math.max(82, height * 0.3);
       if (isRunning && countInStepsLeft > 0) {
         const countNum = Math.ceil(countInStepsLeft / 2);
@@ -460,7 +659,6 @@ export const compingGrooveGame = {
         c.font = '700 15px "Hiragino Maru Gothic ProN", sans-serif';
         c.fillText(`カウントイン… 最初は ${curChord.symbol}`, width / 2, headerY + 42);
       } else {
-        // 現在のコード
         c.fillStyle = curChord.color;
         c.font = '800 15px "Hiragino Maru Gothic ProN", sans-serif';
         c.fillText(curChord.degree, width / 2, headerY - 34);
@@ -469,13 +667,11 @@ export const compingGrooveGame = {
         c.font = `900 ${Math.min(54, Math.round(height * 0.16))}px "Hiragino Maru Gothic ProN", sans-serif`;
         c.fillText(curChord.symbol, width / 2, headerY + 4);
 
-        // 構成音
         const tonesText = curChord.noteLabels.map((n) => `${n.nameEn}(${n.solfege})`).join('  ');
         c.fillStyle = '#cbd2ff';
         c.font = '700 14px "Hiragino Maru Gothic ProN", sans-serif';
         c.fillText(tonesText, width / 2, headerY + 38);
 
-        // 次のコード予告（右側）
         if (width >= 480) {
           c.textAlign = 'left';
           c.fillStyle = 'rgba(200, 210, 255, 0.55)';
@@ -488,12 +684,31 @@ export const compingGrooveGame = {
         }
       }
 
-      // 8ステップ（1小節）ビートタイムライン
+      // 8ステップ（1小節）タイムライン
       const padX = Math.max(24, width * 0.07);
       const trackW = width - padX * 2;
       const cellW = trackW / 8;
       const trackY = Math.min(height - 74, Math.max(headerY + 64, height * 0.62));
       const trackH = 52;
+
+      // ガイドメロディのプレビュー（伴奏モード＋メロディON時）
+      if (role === 'comping' && guideMelodyOn) {
+        const barEvents = barMelodies[barIdx % barMelodies.length] || [];
+        for (const ev of barEvents) {
+          const ex = padX + ev.step * cellW + cellW / 2;
+          const info = getNoteInfo(ev.midi);
+          const isNow = isRunning && countInStepsLeft === 0 && currentGuideMelodyNote && currentGuideMelodyNote.step === ev.step;
+          c.save();
+          c.fillStyle = isNow ? info.color : 'rgba(255, 255, 255, 0.14)';
+          c.beginPath();
+          c.roundRect(ex - 18, trackY - 26, 36, 20, 999);
+          c.fill();
+          c.fillStyle = isNow ? '#ffffff' : '#cbd2ff';
+          c.font = '800 11px "Hiragino Maru Gothic ProN", sans-serif';
+          c.fillText(`♪${info.solfege}`, ex, trackY - 15);
+          c.restore();
+        }
+      }
 
       for (let i = 0; i < 8; i++) {
         const x = padX + i * cellW;
@@ -501,7 +716,6 @@ export const compingGrooveGame = {
         const isCurrentStep = isRunning && countInStepsLeft === 0 && stepIdx === i;
         const isAlreadyHit = stepHitDone.has(i);
 
-        // セル背景
         c.fillStyle = isCurrentStep
           ? 'rgba(255, 255, 255, 0.16)'
           : i % 2 === 0
@@ -509,31 +723,40 @@ export const compingGrooveGame = {
             : 'rgba(255, 255, 255, 0.025)';
         c.fillRect(x + 2, trackY, cellW - 4, trackH);
 
-        // ヒットすべきリズムブロック
         if (isHitTarget) {
           c.save();
-          c.fillStyle = isAlreadyHit ? '#38c976' : curChord.color;
-          c.globalAlpha = isCurrentStep ? 1 : 0.85;
-          c.beginPath();
-          c.roundRect(x + 6, trackY + 7, cellW - 12, trackH - 14, 10);
-          c.fill();
-          c.strokeStyle = '#ffffff';
-          c.lineWidth = isCurrentStep ? 3 : 1.5;
-          c.stroke();
+          if (role === 'melody') {
+            // 自動伴奏が鳴るタイミングを可視化
+            c.fillStyle = isCurrentStep ? curChord.color : `${curChord.color}66`;
+            c.beginPath();
+            c.roundRect(x + 6, trackY + 10, cellW - 12, trackH - 20, 10);
+            c.fill();
+            c.fillStyle = '#ffffff';
+            c.font = '800 11px "Hiragino Maru Gothic ProN", sans-serif';
+            c.fillText('伴奏♪', x + cellW / 2, trackY + trackH / 2 + 1);
+          } else {
+            c.fillStyle = isAlreadyHit ? '#38c976' : curChord.color;
+            c.globalAlpha = isCurrentStep ? 1 : 0.85;
+            c.beginPath();
+            c.roundRect(x + 6, trackY + 7, cellW - 12, trackH - 14, 10);
+            c.fill();
+            c.strokeStyle = '#ffffff';
+            c.lineWidth = isCurrentStep ? 3 : 1.5;
+            c.stroke();
 
-          c.fillStyle = '#ffffff';
-          c.font = '800 13px "Hiragino Maru Gothic ProN", sans-serif';
-          c.fillText(isAlreadyHit ? '✓' : '弾く!', x + cellW / 2, trackY + trackH / 2 + 1);
+            c.fillStyle = '#ffffff';
+            c.font = '800 13px "Hiragino Maru Gothic ProN", sans-serif';
+            c.fillText(isAlreadyHit ? '✓' : '弾く!', x + cellW / 2, trackY + trackH / 2 + 1);
+          }
           c.restore();
         }
 
-        // 拍ラベル (1 & 2 & 3 & 4 &)
         c.fillStyle = i % 2 === 0 ? '#ffffff' : 'rgba(200, 210, 255, 0.55)';
         c.font = `${i % 2 === 0 ? '800 14px' : '700 12px'} "Hiragino Maru Gothic ProN", sans-serif`;
         c.fillText(STEP_LABELS[i], x + cellW / 2, trackY + trackH + 18);
       }
 
-      // 滑らかに走るプレイヘッド
+      // プレイヘッド
       if (isRunning && countInStepsLeft === 0 && stepIdx >= 0) {
         const stepMs = getStepDurationMs();
         const frac = Math.max(0, Math.min(1, (now - stepStartPerf) / stepMs));
@@ -545,12 +768,15 @@ export const compingGrooveGame = {
         c.lineTo(headX, trackY + trackH + 4);
         c.stroke();
       } else if (!isRunning) {
-        c.fillStyle = 'rgba(255, 222, 125, 0.9)';
+        c.fillStyle = 'rgba(255, 222, 125, 0.92)';
         c.font = '700 14px "Hiragino Maru Gothic ProN", sans-serif';
-        c.fillText('右上の「▶ スタート」を押してドラムに合わせてコードを刻もう！', width / 2, trackY - 16);
+        const prompt = role === 'comping'
+          ? '「▶ スタート」でガイドメロディ＆ドラムに合わせて伴奏しよう！'
+          : '「▶ スタート」で自動伴奏を流し、光る音でメロディを弾こう！';
+        c.fillText(prompt, width / 2, trackY - (role === 'comping' && guideMelodyOn ? 36 : 16));
       }
 
-      // 判定ポップアップ
+      // 伴奏タイミング判定ポップアップ
       for (let i = hitMarkers.length - 1; i >= 0; i--) {
         const m = hitMarkers[i];
         m.yOffset -= 0.9;
@@ -571,17 +797,51 @@ export const compingGrooveGame = {
         c.restore();
       }
 
+      // メロディ演奏時の音符リング＆スケール評価
+      for (let i = soloBursts.length - 1; i >= 0; i--) {
+        const sb = soloBursts[i];
+        sb.y += sb.vy;
+        sb.r += (sb.maxR - sb.r) * 0.12;
+        sb.alpha -= 0.022;
+        if (sb.alpha <= 0) {
+          soloBursts.splice(i, 1);
+          continue;
+        }
+        c.save();
+        c.globalAlpha = sb.alpha;
+        c.strokeStyle = sb.color;
+        c.lineWidth = 3;
+        c.beginPath();
+        c.arc(sb.x, sb.y, sb.r, 0, Math.PI * 2);
+        c.stroke();
+
+        c.font = '800 15px "Hiragino Maru Gothic ProN", sans-serif';
+        c.lineWidth = 4;
+        c.strokeStyle = '#14173b';
+        c.strokeText(sb.text, sb.x, sb.y - 6);
+        c.fillStyle = '#ffffff';
+        c.fillText(sb.text, sb.x, sb.y - 6);
+        c.restore();
+      }
+
       rafId = requestAnimationFrame(tick);
     };
 
-    syncHintKeys();
+    syncRoleUI();
     rafId = requestAnimationFrame(tick);
 
     return {
       onNoteOn(noteInfo) {
         pressedNotes.add(noteInfo.midi);
+
+        if (role === 'melody') {
+          soloNoteCount++;
+          syncHudStats();
+          spawnSoloVisual(noteInfo);
+          return;
+        }
+
         const now = performance.now();
-        // 和音の同時押し（65ms以内の連続NoteOn）は1回のストロークとして判定する
         while (recentChordBuffer.length > 0 && now - recentChordBuffer[0].ts > 120) {
           recentChordBuffer.shift();
         }
@@ -589,7 +849,6 @@ export const compingGrooveGame = {
 
         if (now - lastNoteBurstTs > 75) {
           lastNoteBurstTs = now;
-          // 少しだけ(35ms)和音の残りの指が揃うのを待ってから判定
           setTimeout(() => evaluateStrike(), 35);
         }
       },
