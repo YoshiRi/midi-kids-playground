@@ -9,7 +9,10 @@ import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storag
 import {
   PROGRESSIONS,
   KEYS,
+  TENSION_DEGREES,
+  ChordInputCollector,
   buildChord,
+  buildTensionChallenge,
   resolveProgression,
   evaluateChordMatch,
   getScalePitchClasses,
@@ -64,7 +67,7 @@ test('midi.js: NoteOn / NoteOff / vel=0 メッセージ解析', () => {
 });
 
 test('gameRegistry.js: 全ミニゲームが有効なプラグイン契約を満たす', () => {
-  assert.ok(GAMES.length >= 5);
+  assert.ok(GAMES.length >= 6);
   const ids = new Set();
   for (const g of GAMES) {
     assert.ok(g.id && typeof g.id === 'string');
@@ -164,4 +167,72 @@ test('chords.js: コード生成・移調・転回形判定・全進行の整合
 
   assert.deepEqual(getScalePitchClasses('C', { pentatonic: true }), [0, 2, 4, 7, 9]);
   assert.deepEqual(getScalePitchClasses('C', { pentatonic: false }), [0, 2, 4, 5, 7, 9, 11]);
+});
+
+test('chords.js: 7th/9th/13thテンション問題生成と進行パターン解説メタデータ', () => {
+  assert.ok(PROGRESSIONS.length >= 8);
+  for (const p of PROGRESSIONS) {
+    assert.ok(p.shortTitle && p.mood && p.theory);
+    for (const s of p.steps) {
+      assert.ok(s.fn);
+    }
+  }
+
+  // Key C の 9th は D (pc=2)、13th は A (pc=9)、maj7 は B (pc=11)
+  const c9 = buildTensionChallenge(0, '9');
+  assert.equal(c9.tensionPc, 2);
+  assert.equal(c9.tensionNoteName, 'D');
+  assert.equal(c9.fullSymbol, 'Cadd9');
+
+  const c13 = buildTensionChallenge(0, '13');
+  assert.equal(c13.tensionPc, 9);
+  assert.equal(c13.tensionNoteName, 'A');
+  assert.equal(c13.fullSymbol, 'C13');
+
+  const cmaj7 = buildTensionChallenge(0, 'maj7');
+  assert.equal(cmaj7.tensionPc, 11);
+  assert.equal(cmaj7.tensionNoteName, 'B');
+
+  for (const t of TENSION_DEGREES) {
+    const ch = buildTensionChallenge(0, t.id);
+    assert.equal(ch.tensionPc, t.semitones % 12);
+    assert.ok(ch.fullVoicing.includes(ch.tensionMidi));
+  }
+});
+
+test('chords.js: ChordInputCollector の同時押し＆階段（アルペジオ）判定', () => {
+  const cMajPcs = [0, 4, 7];
+
+  // 1. 階段（1音ずつ押して離す）でも window 内なら正解になること
+  const arp = new ChordInputCollector({ windowMs: 2000, resetOnWrong: false });
+  let r1 = arp.noteOn(60, cMajPcs, 1000); // C
+  arp.noteOff(60);
+  assert.equal(r1.isComplete, false);
+  assert.deepEqual(r1.matched, [0]);
+
+  let r2 = arp.noteOn(64, cMajPcs, 1300); // E
+  arp.noteOff(64);
+  assert.equal(r2.isComplete, false);
+  assert.deepEqual(r2.matched, [0, 4]);
+
+  let r3 = arp.noteOn(67, cMajPcs, 1600); // G（3音揃った！）
+  assert.equal(r3.isComplete, true);
+  assert.equal(r3.isArpeggio, true);
+
+  // 2. resetOnWrong=true のとき構成外音で階段バッファがリセットされること
+  const strict = new ChordInputCollector({ windowMs: 2000, resetOnWrong: true });
+  strict.noteOn(60, cMajPcs, 1000);
+  strict.noteOff(60);
+  strict.noteOn(61, cMajPcs, 1200); // C#（構成外）
+  strict.noteOff(61);
+  const afterWrong = strict.noteOn(64, cMajPcs, 1400); // E だけが残る
+  assert.equal(afterWrong.isComplete, false);
+  assert.deepEqual(afterWrong.matched, [4]);
+
+  // 3. windowMs を超えると古い音は失効すること
+  const expired = new ChordInputCollector({ windowMs: 500, resetOnWrong: false });
+  expired.noteOn(60, cMajPcs, 1000);
+  expired.noteOff(60);
+  const late = expired.noteOn(64, cMajPcs, 2000); // 1000ms経過
+  assert.deepEqual(late.matched, [4]);
 });

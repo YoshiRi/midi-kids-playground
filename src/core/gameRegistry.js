@@ -1,6 +1,7 @@
 import { fireworksPartyGame } from '../games/fireworksParty.js';
 import { starQuestGame } from '../games/starQuest.js';
 import { rhythmFallGame } from '../games/rhythmFall.js';
+import { progressionLabGame } from '../games/progressionLab.js';
 import { chordTrainerGame } from '../games/chordTrainer.js';
 import { compingGrooveGame } from '../games/compingGroove.js';
 
@@ -12,6 +13,7 @@ export const GAMES = [
   fireworksPartyGame,
   starQuestGame,
   rhythmFallGame,
+  progressionLabGame,
   chordTrainerGame,
   compingGrooveGame,
 ];
