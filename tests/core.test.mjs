@@ -5,7 +5,14 @@ import { midiToFreq, getNoteInfo, matchesNote, getWhiteNotesInRange } from '../s
 import { MidiManager } from '../src/core/midi.js';
 import { GAMES, getGameById } from '../src/core/gameRegistry.js';
 import { SONGS, getSongById, splitIntoPhrases } from '../src/data/songs.js';
-import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storage.js';
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  DEFAULT_EARCOPY_STATE,
+  loadEarCopyState,
+  saveEarCopyState,
+} from '../src/core/storage.js';
 import {
   PROGRESSIONS,
   KEYS,
@@ -13,6 +20,7 @@ import {
   ChordInputCollector,
   buildChord,
   buildTensionChallenge,
+  detectChord,
   resolveProgression,
   evaluateChordMatch,
   getScalePitchClasses,
@@ -67,7 +75,7 @@ test('midi.js: NoteOn / NoteOff / vel=0 メッセージ解析', () => {
 });
 
 test('gameRegistry.js: 全ミニゲームが有効なプラグイン契約を満たす', () => {
-  assert.ok(GAMES.length >= 6);
+  assert.ok(GAMES.length >= 7);
   const ids = new Set();
   for (const g of GAMES) {
     assert.ok(g.id && typeof g.id === 'string');
@@ -235,4 +243,73 @@ test('chords.js: ChordInputCollector の同時押し＆階段（アルペジオ�
   expired.noteOff(60);
   const late = expired.noteOn(64, cMajPcs, 2000); // 1000ms経過
   assert.deepEqual(late.matched, [4]);
+});
+
+test('chords.js: detectChord のリアルタイム和音解析（トライアド・7th・9th・13th・オンコード・ディグリー）', () => {
+  // 基本トライアド & 7th
+  const cMaj = detectChord([60, 64, 67], { keyId: 'C' });
+  assert.equal(cMaj.symbol, 'C');
+  assert.equal(cMaj.degree, 'I');
+
+  const am7 = detectChord([57, 60, 64, 67], { keyId: 'C' });
+  assert.equal(am7.symbol, 'Am7');
+  assert.equal(am7.degree, 'vi7');
+
+  const fmaj7 = detectChord([53, 57, 60, 64], { keyId: 'C' });
+  assert.equal(fmaj7.symbol, 'Fmaj7');
+  assert.equal(fmaj7.degree, 'IVmaj7');
+
+  // テンションコード (Cadd9, G9, G13, Bm7(b5))
+  const cadd9 = detectChord([60, 62, 64, 67], { keyId: 'C' });
+  assert.equal(cadd9.symbol, 'Cadd9');
+
+  const g9 = detectChord([55, 59, 65, 69], { keyId: 'C' }); // 5度省略 G9 (G, B, F, A)
+  assert.equal(g9.symbol, 'G9');
+  assert.equal(g9.degree, 'V9');
+
+  const g13 = detectChord([55, 59, 65, 76], { keyId: 'C' }); // 5度省略 G13 (G, B, F, E)
+  assert.equal(g13.symbol, 'G13');
+  assert.equal(g13.degree, 'V13');
+
+  const bm7b5 = detectChord([59, 62, 65, 69], { keyId: 'C' });
+  assert.equal(bm7b5.symbol, 'Bm7(b5)');
+
+  // オンコード / 転回形 (C/E, F/G)
+  const cOverE = detectChord([52, 60, 67], { keyId: 'C' });
+  assert.equal(cOverE.symbol, 'C/E');
+  assert.equal(cOverE.degree, 'I/III');
+
+  const fOverG = detectChord([55, 65, 69, 72], { keyId: 'C' });
+  assert.equal(fOverG.symbol, 'F/G');
+  assert.equal(fOverG.degree, 'IV/V');
+  assert.ok(fOverG.alternatives.includes('G9sus4'));
+
+  // 単音 & 2音パワーコード
+  const single = detectChord([62], { keyId: 'C' });
+  assert.equal(single.kind, 'single');
+  assert.equal(single.symbol, 'D');
+
+  const power = detectChord([60, 67], { keyId: 'C' });
+  assert.equal(power.symbol, 'C5');
+});
+
+test('storage.js: 耳コピ進行履歴と保存スロットの永続化', () => {
+  const mem = new Map();
+  const mockStorage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => mem.set(k, String(v)),
+  };
+
+  assert.deepEqual(loadEarCopyState(mockStorage), DEFAULT_EARCOPY_STATE);
+  saveEarCopyState(
+    {
+      keyId: 'G',
+      history: [{ id: '1', symbol: 'G', degree: 'I', rootPc: 7, bassPc: 7, color: '#1982c4', voicing: [55, 59, 62] }],
+    },
+    mockStorage
+  );
+  const loaded = loadEarCopyState(mockStorage);
+  assert.equal(loaded.keyId, 'G');
+  assert.equal(loaded.history.length, 1);
+  assert.equal(loaded.history[0].symbol, 'G');
 });

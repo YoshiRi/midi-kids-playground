@@ -5,17 +5,17 @@ import { PITCH_CLASSES } from '../core/notes.js';
  */
 
 export const CHORD_QUALITIES = {
-  maj:  { id: 'maj',  suffix: '',     label: 'メジャー (Major)',    shortLabel: 'Major', intervals: [0, 4, 7] },
-  min:  { id: 'min',  suffix: 'm',    label: 'マイナー (Minor)',    shortLabel: 'Minor', intervals: [0, 3, 7] },
-  '7':  { id: '7',    suffix: '7',    label: 'セブンス (7)',        shortLabel: '7th',   intervals: [0, 4, 7, 10] },
-  maj7: { id: 'maj7', suffix: 'maj7', label: 'メジャー7 (maj7)',    shortLabel: 'maj7',  intervals: [0, 4, 7, 11] },
-  m7:   { id: 'm7',   suffix: 'm7',   label: 'マイナー7 (m7)',      shortLabel: 'm7',    intervals: [0, 3, 7, 10] },
-  sus4: { id: 'sus4', suffix: 'sus4', label: 'サスフォー (sus4)',   shortLabel: 'sus4',  intervals: [0, 5, 7] },
-  add9: { id: 'add9', suffix: 'add9', label: 'アドナインス (add9)', shortLabel: 'add9',  intervals: [0, 4, 7, 14] },
-  maj9: { id: 'maj9', suffix: 'maj9', label: 'メジャー9 (maj9)',    shortLabel: 'maj9',  intervals: [0, 4, 7, 11, 14] },
-  '9':  { id: '9',    suffix: '9',    label: 'ナインス (9)',        shortLabel: '9th',   intervals: [0, 4, 7, 10, 14] },
-  m9:   { id: 'm9',   suffix: 'm9',   label: 'マイナー9 (m9)',      shortLabel: 'm9',    intervals: [0, 3, 7, 10, 14] },
-  '13': { id: '13',   suffix: '13',   label: 'サーティーンス (13)', shortLabel: '13th',  intervals: [0, 4, 7, 10, 21] },
+  maj:  { id: 'maj',  suffix: '',     label: 'メジャー (Major)',  shortLabel: 'Major', intervals: [0, 4, 7] },
+  min:  { id: 'min',  suffix: 'm',    label: 'マイナー (Minor)',  shortLabel: 'Minor', intervals: [0, 3, 7] },
+  '7':  { id: '7',    suffix: '7',    label: 'セブンス (7)',      shortLabel: '7th',   intervals: [0, 4, 7, 10] },
+  maj7: { id: 'maj7', suffix: 'maj7', label: 'メジャー7 (maj7)',  shortLabel: 'maj7',  intervals: [0, 4, 7, 11] },
+  m7:   { id: 'm7',   suffix: 'm7',   label: 'マイナー7 (m7)',    shortLabel: 'm7',    intervals: [0, 3, 7, 10] },
+  sus4: { id: 'sus4', suffix: 'sus4', label: 'サスフォー (sus4)', shortLabel: 'sus4',  intervals: [0, 5, 7] },
+  add9: { id: 'add9', suffix: 'add9', label: 'アドナインス (add9)', shortLabel: 'add9', intervals: [0, 4, 7, 14] },
+  maj9: { id: 'maj9', suffix: 'maj9', label: 'メジャー9 (maj9)',  shortLabel: 'maj9',  intervals: [0, 4, 7, 11, 14] },
+  '9':  { id: '9',    suffix: '9',    label: 'ナインス (9)',      shortLabel: '9th',   intervals: [0, 4, 7, 10, 14] },
+  m9:   { id: 'm9',   suffix: 'm9',   label: 'マイナー9 (m9)',    shortLabel: 'm9',    intervals: [0, 3, 7, 10, 14] },
+  '13': { id: '13',   suffix: '13',   label: 'サーティーンス (13)', shortLabel: '13th', intervals: [0, 4, 7, 10, 21] },
 };
 
 /**
@@ -125,11 +125,26 @@ export const KEYS = [
   { id: 'A',  label: 'Key: A',  rootPc: 9 },
 ];
 
+export const ALL_12_KEYS = [
+  { id: 'C',  rootPc: 0,  preferFlat: false },
+  { id: 'Db', rootPc: 1,  preferFlat: true  },
+  { id: 'D',  rootPc: 2,  preferFlat: false },
+  { id: 'Eb', rootPc: 3,  preferFlat: true  },
+  { id: 'E',  rootPc: 4,  preferFlat: false },
+  { id: 'F',  rootPc: 5,  preferFlat: true  },
+  { id: 'F#', rootPc: 6,  preferFlat: false },
+  { id: 'G',  rootPc: 7,  preferFlat: false },
+  { id: 'Ab', rootPc: 8,  preferFlat: true  },
+  { id: 'A',  rootPc: 9,  preferFlat: false },
+  { id: 'Bb', rootPc: 10, preferFlat: true  },
+  { id: 'B',  rootPc: 11, preferFlat: false },
+];
+
 export const HARMONIC_FUNCTIONS = {
-  T:    { id: 'T',    label: 'T (安定)',        color: '#38c976' },
-  SD:   { id: 'SD',   label: 'SD (広がり)',     color: '#1982c4' },
-  D:    { id: 'D',    label: 'D (緊張→解決)',   color: '#ff595e' },
-  SDm:  { id: 'SDm',  label: 'SDm (切なさ)',    color: '#9b72ff' },
+  T:    { id: 'T',    label: 'T (安定)',       color: '#38c976' },
+  SD:   { id: 'SD',   label: 'SD (広がり)',    color: '#1982c4' },
+  D:    { id: 'D',    label: 'D (緊張→解決)',  color: '#ff595e' },
+  SDm:  { id: 'SDm',  label: 'SDm (切なさ)',   color: '#9b72ff' },
   SecD: { id: 'SecD', label: 'SecD (強い引き)', color: '#ff924c' },
 };
 
@@ -153,6 +168,7 @@ export function buildChord(rootPc, qualityId = 'maj', { degree = '', fn = '', pr
 
   const pitchClasses = [...new Set(q.intervals.map((iv) => (normalizedRoot + iv) % 12))];
 
+  // ルートが G# 以上なら少し下に寄せると中央鍵盤で弾きやすい
   const anchorRoot = normalizedRoot >= 8 ? baseOctaveMidi - 12 + normalizedRoot : baseOctaveMidi + normalizedRoot;
   const voicing = q.intervals.map((iv) => anchorRoot + iv);
   const noteLabels = pitchClasses.map((pc) => ({
@@ -182,6 +198,7 @@ export function buildChord(rootPc, qualityId = 'maj', { degree = '', fn = '', pr
 export function buildTensionChallenge(rootPc, tensionId, { preferFlat = false } = {}) {
   const tension = TENSION_DEGREES.find((t) => t.id === tensionId) || TENSION_DEGREES[0];
   const normalizedRoot = ((rootPc % 12) + 12) % 12;
+  const baseAnchor = normalizedRoot >= 7 ? 48 + normalizedRoot : 54 + (normalizedRoot - 6);
   // ルートを C3(48)〜B3(59) 付近に置くと、トップの 9th〜13th が D4〜A5 に気持ちよく収まる
   const safeBaseRoot = 48 + normalizedRoot;
   const baseChord = buildChord(normalizedRoot, tension.baseQuality, {
@@ -189,6 +206,7 @@ export function buildTensionChallenge(rootPc, tensionId, { preferFlat = false } 
     baseOctaveMidi: 48,
   });
 
+  // 土台コードのボイシングは safeBaseRoot 基準に揃える
   const q = CHORD_QUALITIES[tension.baseQuality] || CHORD_QUALITIES.maj;
   const baseVoicing = q.intervals.map((iv) => safeBaseRoot + iv);
   const tensionMidi = safeBaseRoot + tension.semitones;
@@ -212,6 +230,7 @@ export function buildTensionChallenge(rootPc, tensionId, { preferFlat = false } 
     tensionColor: PITCH_CLASSES[tensionPc].color,
     fullVoicing: [...baseVoicing, tensionMidi],
     fullSymbol: `${rootName}${tension.symbolSuffix}`,
+    _unusedBaseAnchor: baseAnchor,
   };
 }
 
@@ -407,9 +426,7 @@ export class ChordInputCollector {
   constructor({ windowMs = 2600, resetOnWrong = false } = {}) {
     this.windowMs = windowMs;
     this.resetOnWrong = resetOnWrong;
-    /** @type {Set<number>} 現在押下中の MIDI ノート */
     this.pressedMidis = new Set();
-    /** @type {Map<number, number>} pc -> 最終打鍵時刻(ms) */
     this.recentPcTimestamps = new Map();
   }
 
@@ -426,18 +443,13 @@ export class ChordInputCollector {
     }
   }
 
-  /**
-   * 鍵盤押下を記録し、現在ターゲットに対する一致状況を返す
-   */
   noteOn(midi, targetPitchClasses, now = performance.now()) {
     this._prune(now);
     this.pressedMidis.add(midi);
 
     const pc = ((midi % 12) + 12) % 12;
     const targetSet = new Set(targetPitchClasses);
-    const isTargetNote = targetSet.has(pc);
-
-    if (isTargetNote) {
+    if (targetSet.has(pc)) {
       this.recentPcTimestamps.set(pc, now);
     } else if (this.resetOnWrong) {
       this.recentPcTimestamps.clear();
@@ -452,11 +464,8 @@ export class ChordInputCollector {
 
   evaluate(targetPitchClasses, now = performance.now()) {
     this._prune(now);
-
-    // 1. 同時押し判定（現在押下中の音が完全一致）
     const simultaneous = evaluateChordMatch(this.pressedMidis, targetPitchClasses);
 
-    // 2. 階段（アルペジオ）判定（押下中 + windowMs 以内の正解構成音の合算）
     const activePcs = new Set(this.recentPcTimestamps.keys());
     for (const m of this.pressedMidis) {
       activePcs.add(((m % 12) + 12) % 12);
@@ -464,8 +473,6 @@ export class ChordInputCollector {
     const targetSet = new Set(targetPitchClasses);
     const matched = targetPitchClasses.filter((pc) => activePcs.has(pc));
     const missing = targetPitchClasses.filter((pc) => !activePcs.has(pc));
-
-    // 現在押しっぱなしの構成外音がないことも確認（同時押しで誤鍵盤ベタ押しを弾くため）
     const heldExtras = [...this.pressedMidis]
       .map((m) => ((m % 12) + 12) % 12)
       .filter((pc) => !targetSet.has(pc));
@@ -546,4 +553,253 @@ export function generateProgressionMelodies(chords, keyId = 'C', seed = 0) {
 
     return events;
   });
+}
+
+/* =========================================================
+   リアルタイム和音解析エンジン（耳コピ・オンコード・テンション対応）
+   ========================================================= */
+
+const INTERVAL_DEGREE_NAMES = ['R', 'b9', '9', 'm3', '3', '11', '#11', '5', 'b13', '13', 'b7', 'M7'];
+
+const TWO_NOTE_INTERVALS = [
+  'ユニゾン', '短2度 (b9)', '長2度 (9)', '短3度 (m3)', '長3度 (3)', '完全4度 (4)',
+  '増4度 / 減5度', '完全5度 (5)', '短6度 (b6)', '長6度 (6)', '短7度 (b7)', '長7度 (M7)',
+];
+
+const ROMAN_BY_SEMITONE = [
+  { upper: 'I',    lower: 'i'    },
+  { upper: 'bII',  lower: 'bii'  },
+  { upper: 'II',   lower: 'ii'   },
+  { upper: 'bIII', lower: 'biii' },
+  { upper: 'III',  lower: 'iii'  },
+  { upper: 'IV',   lower: 'iv'   },
+  { upper: '#IV',  lower: '#iv'  },
+  { upper: 'V',    lower: 'v'    },
+  { upper: 'bVI',  lower: 'bvi'  },
+  { upper: 'VI',   lower: 'vi'   },
+  { upper: 'bVII', lower: 'bvii' },
+  { upper: 'VII',  lower: 'vii'  },
+];
+
+const DETECT_TEMPLATES = [
+  { suffix: '',          required: [0, 4, 7],       optional: [],     priority: 100 },
+  { suffix: 'm',         required: [0, 3, 7],       optional: [],     priority: 100 },
+  { suffix: 'sus4',      required: [0, 5, 7],       optional: [],     priority: 92  },
+  { suffix: 'sus2',      required: [0, 2, 7],       optional: [],     priority: 88  },
+  { suffix: 'dim',       required: [0, 3, 6],       optional: [],     priority: 90  },
+  { suffix: 'aug',       required: [0, 4, 8],       optional: [],     priority: 88  },
+  { suffix: 'maj7',      required: [0, 4, 11],      optional: [7],    priority: 98  },
+  { suffix: '7',         required: [0, 4, 10],      optional: [7],    priority: 98  },
+  { suffix: 'm7',        required: [0, 3, 10],      optional: [7],    priority: 98  },
+  { suffix: 'm(maj7)',   required: [0, 3, 11],      optional: [7],    priority: 88  },
+  { suffix: 'm7(b5)',    required: [0, 3, 6, 10],   optional: [],     priority: 94  },
+  { suffix: 'dim7',      required: [0, 3, 6, 9],    optional: [],     priority: 90  },
+  { suffix: '6',         required: [0, 4, 7, 9],    optional: [],     priority: 84  },
+  { suffix: 'm6',        required: [0, 3, 7, 9],    optional: [],     priority: 82  },
+  { suffix: '7sus4',     required: [0, 5, 10],      optional: [7],    priority: 90  },
+  { suffix: 'add9',      required: [0, 4, 7, 2],    optional: [],     priority: 94  },
+  { suffix: 'm(add9)',   required: [0, 3, 7, 2],    optional: [],     priority: 92  },
+  { suffix: 'maj9',      required: [0, 4, 11, 2],   optional: [7],    priority: 95  },
+  { suffix: '9',         required: [0, 4, 10, 2],   optional: [7],    priority: 95  },
+  { suffix: 'm9',        required: [0, 3, 10, 2],   optional: [7],    priority: 95  },
+  { suffix: '9sus4',     required: [0, 5, 10, 2],   optional: [7],    priority: 82  },
+  { suffix: 'm11',       required: [0, 3, 10, 5],   optional: [7, 2], priority: 92  },
+  { suffix: '13',        required: [0, 4, 10, 9],   optional: [7, 2], priority: 93  },
+  { suffix: 'maj13',     required: [0, 4, 11, 9],   optional: [7, 2], priority: 91  },
+  { suffix: '7(b9)',     required: [0, 4, 10, 1],   optional: [7],    priority: 90  },
+  { suffix: '7(#9)',     required: [0, 4, 10, 3],   optional: [7],    priority: 90  },
+  { suffix: 'maj7(#11)', required: [0, 4, 11, 6],   optional: [7, 2], priority: 89  },
+  { suffix: '7(b13)',    required: [0, 4, 10, 8],   optional: [7],    priority: 90  },
+  { suffix: '6/9',       required: [0, 4, 9, 2],    optional: [7],    priority: 84  },
+];
+
+export function getRomanDegree(rootPc, suffix = '', keyId = 'C', bassPc = rootPc) {
+  const key = ALL_12_KEYS.find((k) => k.id === keyId) || ALL_12_KEYS[0];
+  const offset = (((rootPc - key.rootPc) % 12) + 12) % 12;
+  const roman = ROMAN_BY_SEMITONE[offset];
+  const isMinor = suffix.startsWith('m') && !suffix.startsWith('maj');
+  const isDim = suffix.startsWith('dim');
+
+  const base = isMinor || isDim ? roman.lower : roman.upper;
+  const cleanSuffix = isMinor ? suffix.slice(1) : suffix;
+  let deg = `${base}${cleanSuffix}`;
+
+  if (bassPc !== rootPc) {
+    const bassOffset = (((bassPc - key.rootPc) % 12) + 12) % 12;
+    deg += `/${ROMAN_BY_SEMITONE[bassOffset].upper}`;
+  }
+  return deg;
+}
+
+/**
+ * 押された MIDI ノート配列から和音をリアルタイム解析する
+ * - 転回形・オンコード（例: C/E, F/G, Dm7/G）・5度省略・7th/9th/11th/13th・別解釈候補に対応
+ */
+export function detectChord(midiNotes, { keyId = 'C' } = {}) {
+  const uniqueMidis = [...new Set(midiNotes.map((m) => Math.round(m)))].sort((a, b) => a - b);
+  if (uniqueMidis.length === 0) return null;
+
+  const key = ALL_12_KEYS.find((k) => k.id === keyId) || ALL_12_KEYS[0];
+  const preferFlat = key.preferFlat;
+
+  const bassMidi = uniqueMidis[0];
+  const bassPc = ((bassMidi % 12) + 12) % 12;
+  const bassName = formatRootName(bassPc, preferFlat);
+
+  const pcs = [...new Set(uniqueMidis.map((m) => ((m % 12) + 12) % 12))];
+  const pcSet = new Set(pcs);
+
+  const buildNoteDetails = (rootPc) =>
+    pcs.map((pc) => {
+      const iv = (((pc - rootPc) % 12) + 12) % 12;
+      return {
+        pc,
+        nameEn: formatRootName(pc, preferFlat),
+        solfege: PITCH_CLASSES[pc].solfege,
+        degreeLabel: INTERVAL_DEGREE_NAMES[iv],
+        color: PITCH_CLASSES[pc].color,
+      };
+    });
+
+  if (pcs.length === 1) {
+    const name = formatRootName(bassPc, preferFlat);
+    return {
+      symbol: name,
+      rootPc: bassPc,
+      bassPc,
+      suffix: '',
+      degree: getRomanDegree(bassPc, '', keyId, bassPc),
+      kind: 'single',
+      hint: `単音 (${PITCH_CLASSES[bassPc].solfege})`,
+      color: PITCH_CLASSES[bassPc].color,
+      alternatives: [],
+      voicing: uniqueMidis,
+      notes: buildNoteDetails(bassPc),
+    };
+  }
+
+  if (pcs.length === 2) {
+    const otherPc = pcs.find((p) => p !== bassPc) ?? bassPc;
+    const iv = (((otherPc - bassPc) % 12) + 12) % 12;
+    const isPower = iv === 7;
+    const symbol = isPower ? `${bassName}5` : `${bassName} + ${formatRootName(otherPc, preferFlat)}`;
+    return {
+      symbol,
+      rootPc: bassPc,
+      bassPc,
+      suffix: isPower ? '5' : '',
+      degree: getRomanDegree(bassPc, isPower ? '5' : '', keyId, bassPc),
+      kind: 'interval',
+      hint: isPower ? 'パワーコード (完全5度)' : `2音インターバル: ${TWO_NOTE_INTERVALS[iv]}`,
+      color: PITCH_CLASSES[bassPc].color,
+      alternatives: [],
+      voicing: uniqueMidis,
+      notes: buildNoteDetails(bassPc),
+    };
+  }
+
+  const candidates = [];
+
+  for (let rootPc = 0; rootPc < 12; rootPc++) {
+    for (const tpl of DETECT_TEMPLATES) {
+      const reqPcs = tpl.required.map((iv) => (rootPc + iv) % 12);
+      const optPcs = tpl.optional.map((iv) => (rootPc + iv) % 12);
+      const allowedSet = new Set([...reqPcs, ...optPcs]);
+
+      if (!reqPcs.every((p) => pcSet.has(p))) continue;
+      if (pcs.some((p) => !allowedSet.has(p))) continue;
+
+      const isRootInBass = rootPc === bassPc;
+      const hasFifth = optPcs.includes((rootPc + 7) % 12) ? pcSet.has((rootPc + 7) % 12) : true;
+
+      let score = tpl.priority;
+      if (isRootInBass) score += 28;
+      else if (pcSet.has(bassPc)) score += 6;
+      if (hasFifth) score += 4;
+      const keyOffset = (((rootPc - key.rootPc) % 12) + 12) % 12;
+      if ([0, 2, 4, 5, 7, 9].includes(keyOffset)) score += 3;
+
+      const rootName = formatRootName(rootPc, preferFlat);
+      const symbol = isRootInBass ? `${rootName}${tpl.suffix}` : `${rootName}${tpl.suffix}/${bassName}`;
+
+      candidates.push({
+        symbol,
+        rootPc,
+        bassPc,
+        suffix: tpl.suffix,
+        score,
+        isSlash: !isRootInBass,
+      });
+    }
+  }
+
+  // オンコード特別チェック: ベース音を除いた上声だけで綺麗なコードになるケース（例: F/G, Dm7/G）
+  if (pcs.length >= 4) {
+    const upperPcs = pcs.filter((p) => p !== bassPc);
+    const upperSet = new Set(upperPcs);
+    for (let rootPc = 0; rootPc < 12; rootPc++) {
+      if (rootPc === bassPc) continue;
+      for (const tpl of DETECT_TEMPLATES) {
+        if (tpl.required.length > 4) continue;
+        const reqPcs = tpl.required.map((iv) => (rootPc + iv) % 12);
+        const optPcs = tpl.optional.map((iv) => (rootPc + iv) % 12);
+        const allowedSet = new Set([...reqPcs, ...optPcs]);
+        if (!reqPcs.every((p) => upperSet.has(p))) continue;
+        if (upperPcs.some((p) => !allowedSet.has(p))) continue;
+
+        const rootName = formatRootName(rootPc, preferFlat);
+        const symbol = `${rootName}${tpl.suffix}/${bassName}`;
+        if (!candidates.some((c) => c.symbol === symbol)) {
+          candidates.push({
+            symbol,
+            rootPc,
+            bassPc,
+            suffix: tpl.suffix,
+            score: tpl.priority + (tpl.required.length === 3 ? 16 : 12),
+            isSlash: true,
+          });
+        }
+      }
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  if (candidates.length > 0) {
+    const best = candidates[0];
+    const alternatives = candidates
+      .slice(1)
+      .filter((c) => c.symbol !== best.symbol)
+      .slice(0, 3)
+      .map((c) => c.symbol);
+
+    return {
+      symbol: best.symbol,
+      rootPc: best.rootPc,
+      bassPc: best.bassPc,
+      suffix: best.suffix,
+      degree: getRomanDegree(best.rootPc, best.suffix, keyId, best.bassPc),
+      kind: 'chord',
+      hint: best.isSlash ? `オンコード / 転回形 (Bass: ${bassName})` : `${pcs.length}和音`,
+      color: PITCH_CLASSES[best.rootPc].color,
+      alternatives,
+      voicing: uniqueMidis,
+      notes: buildNoteDetails(best.rootPc),
+    };
+  }
+
+  const noteListStr = pcs.map((p) => formatRootName(p, preferFlat)).join(' + ');
+  return {
+    symbol: `${bassName} ?`,
+    rootPc: bassPc,
+    bassPc,
+    suffix: '',
+    degree: getRomanDegree(bassPc, '', keyId, bassPc),
+    kind: 'custom',
+    hint: `構成音: ${noteListStr}`,
+    color: PITCH_CLASSES[bassPc].color,
+    alternatives: [],
+    voicing: uniqueMidis,
+    notes: buildNoteDetails(bassPc),
+  };
 }

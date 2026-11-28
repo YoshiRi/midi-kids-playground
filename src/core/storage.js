@@ -4,6 +4,7 @@
  */
 
 const SETTINGS_KEY = 'mkp:settings';
+const EARCOPY_KEY = 'mkp:earcopy';
 
 export const DEFAULT_SETTINGS = {
   lastGameId: 'fireworks-party',
@@ -54,4 +55,49 @@ function getSafeStorage() {
     // ignore
   }
   return null;
+}
+
+export const DEFAULT_EARCOPY_STATE = {
+  keyId: 'C',
+  inputMode: 'accumulate', // 'simultaneous' | 'accumulate'
+  autoRecord: false,
+  history: [], // Array<{ id, symbol, degree, rootPc, bassPc, color, voicing }>
+  savedSlots: [], // Array<{ id, name, keyId, createdAt, items }>
+};
+
+export function loadEarCopyState(storage = getSafeStorage()) {
+  if (!storage) return structuredCloneSafe(DEFAULT_EARCOPY_STATE);
+  try {
+    const raw = storage.getItem(EARCOPY_KEY);
+    if (!raw) return structuredCloneSafe(DEFAULT_EARCOPY_STATE);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return structuredCloneSafe(DEFAULT_EARCOPY_STATE);
+    return {
+      ...DEFAULT_EARCOPY_STATE,
+      ...parsed,
+      history: Array.isArray(parsed.history) ? parsed.history.slice(0, 64) : [],
+      savedSlots: Array.isArray(parsed.savedSlots) ? parsed.savedSlots.slice(0, 12) : [],
+    };
+  } catch {
+    return structuredCloneSafe(DEFAULT_EARCOPY_STATE);
+  }
+}
+
+export function saveEarCopyState(partial, storage = getSafeStorage()) {
+  const next = {
+    ...loadEarCopyState(storage),
+    ...partial,
+  };
+  if (storage) {
+    try {
+      storage.setItem(EARCOPY_KEY, JSON.stringify(next));
+    } catch {
+      // ignore quota error
+    }
+  }
+  return next;
+}
+
+function structuredCloneSafe(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
