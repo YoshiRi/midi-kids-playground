@@ -48,6 +48,14 @@
 
         <button
           type="button"
+          id="maximize-btn"
+          class="circle-btn"
+          aria-label="さいだいかモード（うっかり防止）"
+          title="最大化・キッズロックモード"
+        >⛶</button>
+
+        <button
+          type="button"
           id="settings-open-btn"
           class="circle-btn"
           aria-haspopup="dialog"
@@ -73,6 +81,17 @@
     <!-- 3. 共通インタラクティブピアノ鍵盤ドック（常にサイズをキープ） -->
     <section id="keyboard-container" class="keyboard-container is-size-normal" aria-label="ピアノけんばん"></section>
   </div>
+
+  <!-- 最大化モード中のみ上部中央に浮く「1秒長押し解除」ボタン（誤タップ防止） -->
+  <button
+    type="button"
+    id="exit-maximize-btn"
+    class="exit-maximize-btn is-hidden"
+    aria-label="1びょう ながおしで 最大化を解除"
+    title="1秒長押し（または Esc）で通常表示に戻る"
+  >
+    <span class="exit-max-label" id="exit-maximize-label">🔒 1びょう長押しで解除</span>
+  </button>
 
   <!-- オーバーレイ1: ゲーム選択シート（ゲームが増えてもトップバーを圧迫しない） -->
   <div id="game-sheet" class="overlay-backdrop" aria-hidden="true" role="dialog" aria-labelledby="game-sheet-title">
@@ -128,6 +147,19 @@
           <div class="drawer-btn-row">
             <button type="button" id="label-toggle" class="drawer-toggle-btn is-active">🏷️ ドレミ表示</button>
             <button type="button" id="pc-hint-toggle" class="drawer-toggle-btn">⌨️ PCキー表示</button>
+          </div>
+        </section>
+
+        <!-- 最大化・誤操作防止 -->
+        <section class="drawer-section">
+          <h3 class="drawer-section-title">📺 最大化・うっかり防止</h3>
+          <button type="button" id="drawer-maximize-btn" class="drawer-toggle-btn is-active">
+            ⛶ 最大化モードにする（1秒長押し解除）
+          </button>
+          <div class="drawer-info-box">
+            💡 <strong>iPad でホームスワイプまで完全に防ぐコツ</strong><br />
+            1. 共有 →「ホーム画面に追加」で全画面起動<br />
+            2. 設定 → アクセシビリティ → <strong>アクセスガイド</strong> をONにし、遊ぶ前に電源ボタンを3回押すとスワイプ終了を完全ロックできます。
           </div>
         </section>
 

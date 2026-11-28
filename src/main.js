@@ -16,6 +16,10 @@ const els = {
   midiStatusBtn: document.getElementById('midi-status-btn'),
   midiStatusText: document.getElementById('midi-status-text'),
   quickMuteBtn: document.getElementById('quick-mute-btn'),
+  maximizeBtn: document.getElementById('maximize-btn'),
+  exitMaximizeBtn: document.getElementById('exit-maximize-btn'),
+  exitMaximizeLabel: document.getElementById('exit-maximize-label'),
+  drawerMaximizeBtn: document.getElementById('drawer-maximize-btn'),
   settingsOpenBtn: document.getElementById('settings-open-btn'),
 
   // Stage & Keyboard
@@ -52,6 +56,112 @@ const els = {
 
 let activeGameId = getGameById(savedSettings.lastGameId).id;
 let activeGameInstance = null;
+let isMaximized = false;
+let wakeLockSentinel = null;
+
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator && navigator.wakeLock && !wakeLockSentinel) {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+      wakeLockSentinel.addEventListener('release', () => {
+        wakeLockSentinel = null;
+      });
+    }
+  } catch {
+    // unsupported or denied
+  }
+}
+
+async function releaseWakeLock() {
+  try {
+    if (wakeLockSentinel) {
+      await wakeLockSentinel.release();
+      wakeLockSentinel = null;
+    }
+  } catch {
+    wakeLockSentinel = null;
+  }
+}
+
+function getFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+async function enterMaximize() {
+  closeAllOverlays();
+  isMaximized = true;
+  document.body.classList.add('is-maximized');
+  els.exitMaximizeBtn?.classList.remove('is-hidden');
+  if (els.exitMaximizeLabel) {
+    els.exitMaximizeLabel.textContent = '🔒 1びょう長押しで解除';
+  }
+  acquireWakeLock();
+
+  // PC / Android Chrome では Fullscreen API でブラウザ枠ごと全画面化
+  // iPad Safari など未対応環境ではそのまま没入レイアウト最大化モードとして動作
+  const rootEl = document.documentElement;
+  try {
+    if (!getFullscreenElement()) {
+      if (typeof rootEl.requestFullscreen === 'function') {
+        await rootEl.requestFullscreen({ navigationUI: 'hide' });
+      } else if (typeof rootEl.webkitRequestFullscreen === 'function') {
+        rootEl.webkitRequestFullscreen();
+      }
+    }
+  } catch {
+    // Fullscreen 非対応・拒否でも集中最大化レイアウトは維持する
+  }
+}
+
+async function exitMaximize() {
+  isMaximized = false;
+  document.body.classList.remove('is-maximized');
+  els.exitMaximizeBtn?.classList.add('is-hidden');
+  els.exitMaximizeBtn?.classList.remove('is-holding');
+  releaseWakeLock();
+
+  try {
+    if (getFullscreenElement()) {
+      if (typeof document.exitFullscreen === 'function') {
+        await document.exitFullscreen();
+      } else if (typeof document.webkitExitFullscreen === 'function') {
+        document.webkitExitFullscreen();
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// 最大化中のうっかりスワイプ（引き下げ更新・横スワイプ戻り・バウンス）を抑止
+document.addEventListener(
+  'touchmove',
+  (e) => {
+    if (!isMaximized) return;
+    // ポップオーバー・モーダル・ドロワー内のスクロールだけは許可
+    if (e.target?.closest?.('.stage-popover, .modal-body, .drawer-body, .game-sheet-grid')) {
+      return;
+    }
+    e.preventDefault();
+  },
+  { passive: false }
+);
+
+// 最大化中のうっかりタブ閉じ・リロード抑止（PC / Android Chrome）
+window.addEventListener('beforeunload', (e) => {
+  if (!isMaximized) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+// ブラウザ側（Esc 等）で Fullscreen を抜けたときは集中モードも同期解除
+const onFullscreenChange = () => {
+  if (isMaximized && !getFullscreenElement()) {
+    exitMaximize();
+  }
+};
+document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
 // iOS/iPadOS Safari は touchstart / touchend / click の同期ハンドラ内でないと
 // Web Audio API とメディアオーディオセッションのロックが解除されないため全イベントで捕捉する
@@ -67,6 +177,7 @@ window.addEventListener('keydown', unlockAudio, { capture: true, passive: true }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     audio.ensureContext();
+    if (isMaximized) acquireWakeLock();
   }
 });
 
@@ -237,8 +348,67 @@ function initControls() {
   });
 
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeAllOverlays();
+    if (e.key === 'Escape') {
+      closeAllOverlays();
+      if (isMaximized) exitMaximize();
+    }
   });
+
+  // 最大化モード（トップバー / 設定ドロワー / 1秒長押し解除）
+  els.maximizeBtn?.addEventListener('click', () => {
+    audio.unlock();
+    enterMaximize();
+  });
+  els.drawerMaximizeBtn?.addEventListener('click', () => {
+    audio.unlock();
+    enterMaximize();
+  });
+
+  if (els.exitMaximizeBtn) {
+    let holdTimer = null;
+    let hintResetTimer = null;
+    let didCompleteHold = false;
+
+    const cancelHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      els.exitMaximizeBtn.classList.remove('is-holding');
+    };
+
+    els.exitMaximizeBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      didCompleteHold = false;
+      els.exitMaximizeBtn.classList.add('is-holding');
+      if (els.exitMaximizeLabel) {
+        els.exitMaximizeLabel.textContent = '🔓 そのまま長押し…';
+      }
+      holdTimer = setTimeout(() => {
+        didCompleteHold = true;
+        cancelHold();
+        exitMaximize();
+      }, 1000);
+    });
+
+    const onRelease = () => {
+      const wasHolding = Boolean(holdTimer);
+      cancelHold();
+      if (wasHolding && !didCompleteHold && els.exitMaximizeLabel) {
+        els.exitMaximizeLabel.textContent = '🔒 1びょう長押しでもどるよ';
+        if (hintResetTimer) clearTimeout(hintResetTimer);
+        hintResetTimer = setTimeout(() => {
+          if (els.exitMaximizeLabel) {
+            els.exitMaximizeLabel.textContent = '🔒 1びょう長押しで解除';
+          }
+        }, 1600);
+      }
+    };
+
+    els.exitMaximizeBtn.addEventListener('pointerup', onRelease);
+    els.exitMaximizeBtn.addEventListener('pointerleave', onRelease);
+    els.exitMaximizeBtn.addEventListener('pointercancel', onRelease);
+  }
 
   // 音色（保存済み設定を復元）
   els.soundSelect.innerHTML = SOUND_PRESETS.map(
